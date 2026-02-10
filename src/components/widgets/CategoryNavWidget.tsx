@@ -319,7 +319,7 @@ const CategoryNavWidget: React.FC<CategoryNavWidgetProps> = ({ data }) => {
                 animate="animate"
                 whileTap={tapEffect}
                 onClick={() => handleCategoryClick(cat)}
-                className={`group relative w-full aspect-[4/5] md:aspect-[3/4] rounded-2xl overflow-hidden border-2 transition-all duration-700 flex flex-col justify-end p-6 md:p-10 shadow-2xl ${isActive ? 'shadow-[0_20px_60px_rgba(245,158,11,0.5)] z-10' : 'border-white/5'}`}
+                className={`group relative w-full ${layout === 'VERTICAL' ? 'min-h-[200px] h-full' : 'aspect-[4/5] md:aspect-[3/4]'} rounded-2xl overflow-hidden border-2 transition-all duration-700 flex flex-col justify-end p-6 md:p-10 shadow-2xl ${isActive ? 'shadow-[0_20px_60px_rgba(245,158,11,0.5)] z-10' : 'border-white/5'}`}
                 style={{ borderColor: isActive ? accentColor : 'rgba(255,255,255,0.08)' }}
             >
                 {cat.photo && (
@@ -377,11 +377,11 @@ const CategoryNavWidget: React.FC<CategoryNavWidgetProps> = ({ data }) => {
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className={`w-full h-full flex flex-col items-center p-6 md:p-12 overflow-hidden relative font-sans bg-transparent ${layout === 'VERTICAL' ? 'justify-start' : 'justify-center'}`}
+            className={`w-full h-full flex flex-col items-center p-2 md:p-4 overflow-hidden relative font-sans bg-transparent ${layout === 'VERTICAL' ? 'justify-start' : 'justify-center'}`}
         >
             {renderHeader()}
 
-            <div className={`w-full relative group ${layout === 'VERTICAL' ? 'overflow-y-auto custom-scrollbar-hidden max-h-[85vh] px-4 pb-40' : 'px-6 md:px-16 flex-1 flex items-center'}`}>
+            <div className={`w-full h-full relative group ${layout === 'VERTICAL' ? 'overflow-y-auto custom-scrollbar-hidden' : 'flex-1 flex items-center'}`}>
                 {layout === 'HORIZONTAL' ? (
                     <>
                         <motion.button
@@ -424,7 +424,7 @@ const CategoryNavWidget: React.FC<CategoryNavWidgetProps> = ({ data }) => {
                     </>
                 ) : (
                     <div
-                        className="grid gap-6 md:gap-10 w-full"
+                        className="grid gap-2 md:gap-4 w-full h-full content-start"
                         style={{
                             gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`
                         }}
