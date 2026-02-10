@@ -113,6 +113,45 @@ nextApp.prepare().then(() => {
         }
     });
 
+    expressApp.post('/api/auth/change-password', async (req, res) => {
+        try {
+            const token = req.cookies.token;
+            if (!token) {
+                return res.status(401).json({ error: 'No autenticado' });
+            }
+
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const { currentPassword, newPassword } = req.body;
+
+            if (!currentPassword || !newPassword) {
+                return res.status(400).json({ error: 'Se requieren ambas contraseñas' });
+            }
+
+            if (newPassword.length < 6) {
+                return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+            }
+
+            const user = await User.findById(decoded.userId);
+            if (!user) {
+                return res.status(404).json({ error: 'Usuario no encontrado' });
+            }
+
+            const isMatch = await bcrypt.compare(currentPassword, user.password);
+            if (!isMatch) {
+                return res.status(400).json({ error: 'Contraseña actual incorrecta' });
+            }
+
+            const salt = await bcrypt.genSalt(10);
+            user.password = await bcrypt.hash(newPassword, salt);
+            await user.save();
+
+            res.json({ message: 'Contraseña actualizada correctamente' });
+        } catch (error) {
+            console.error('Error al cambiar contraseña:', error);
+            res.status(500).json({ error: 'Error interno del servidor' });
+        }
+    });
+
     // Serve static files from /uploads
     expressApp.use('/uploads', express.static(uploadDir));
 

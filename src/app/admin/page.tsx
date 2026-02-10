@@ -9,7 +9,7 @@ import {
     Database, RefreshCw, Eye, MousePointer2, Box, Palette,
     ChevronRight, ChevronLeft, Zap, Globe, Image as ImageIcon, Sparkles, ArrowLeft, Copy, Network, Clock, Search,
     Megaphone, Instagram, PlaneTakeoff, Music, PanelLeftClose, PanelRightClose, PanelLeftOpen, PanelRightOpen,
-    ChevronDown, Link as LinkIcon, Calendar, LogOut
+    ChevronDown, Link as LinkIcon, Calendar, LogOut, Lock
 } from 'lucide-react';
 import { Canvas } from '@/components/builder/Canvas';
 import { RichTextEditor } from '@/components/builder/RichTextEditor';
