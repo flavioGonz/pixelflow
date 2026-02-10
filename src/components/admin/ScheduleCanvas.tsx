@@ -68,10 +68,6 @@ export const ScheduleCanvas: React.FC<ScheduleCanvasProps> = ({ schedule, layout
                     <h2 className="text-4xl font-black text-white italic uppercase tracking-tighter">{schedule.name}</h2>
                 </div>
                 <div className="flex gap-4">
-                    <div className="bg-emerald-500/10 border border-emerald-500/20 px-6 py-3 rounded-xl flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Sincronización Activa</span>
-                    </div>
                 </div>
             </header>
 

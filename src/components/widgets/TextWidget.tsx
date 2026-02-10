@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, Variants } from 'framer-motion';
 
 interface TextWidgetProps {
     data: {
@@ -24,7 +24,7 @@ const TextWidget: React.FC<TextWidgetProps> = ({ data }) => {
     const containerClasses = `w-full h-full p-4 flex flex-col justify-center ${textAlign === 'center' ? 'items-center' : textAlign === 'right' ? 'items-end' : 'items-start'}`;
 
     // Animation variants
-    const fadeIn = {
+    const fadeIn: Variants = {
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
     };

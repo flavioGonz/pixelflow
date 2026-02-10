@@ -213,7 +213,7 @@ nextApp.prepare().then(() => {
                 const layouts = await Layout.find().sort({ updatedAt: -1 });
                 io.emit('layouts_list', layouts);
             } catch (error) {
-                error('Error deleting layout:', error);
+                console.error('Error deleting layout:', error);
             }
         });
 
@@ -229,23 +229,31 @@ nextApp.prepare().then(() => {
 
         socket.on('save_schedule', async (scheduleData) => {
             try {
+                console.log(`[Schedule] Saving schedule: ${scheduleData.name}`);
                 let saved;
-                if (scheduleData._id) {
-                    saved = await Schedule.findByIdAndUpdate(scheduleData._id, scheduleData, { new: true });
+                if (scheduleData._id && mongoose.Types.ObjectId.isValid(scheduleData._id)) {
+                    saved = await Schedule.findByIdAndUpdate(scheduleData._id, scheduleData, { new: true, upsert: true });
                 } else {
-                    saved = await Schedule.create(scheduleData);
+                    // Try to update by name if no ID is present, or create new
+                    saved = await Schedule.findOneAndUpdate(
+                        { name: scheduleData.name },
+                        scheduleData,
+                        { upsert: true, new: true }
+                    );
                 }
-                const schedules = await Schedule.find();
+                const schedules = await Schedule.find().sort({ createdAt: -1 });
                 io.emit('schedules_list', schedules);
+                console.log(`[Schedule] Schedule saved successfully: ${saved.name}`);
             } catch (error) {
-                console.error('Error saving schedule:', error);
+                console.error('[Schedule] Error saving schedule:', error);
+                socket.emit('error_message', 'No se pudo guardar el calendario. Revisa la consola del servidor.');
             }
         });
 
         socket.on('delete_schedule', async (id) => {
             try {
                 await Schedule.findByIdAndDelete(id);
-                const schedules = await Schedule.find();
+                const schedules = await Schedule.find().sort({ createdAt: -1 });
                 io.emit('schedules_list', schedules);
             } catch (error) {
                 console.error('Error deleting schedule:', error);

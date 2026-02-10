@@ -63,7 +63,7 @@ export function FlowMap({ layouts, onEditLayout }: FlowMapProps) {
         if (!layouts || layouts.length === 0) return;
 
         const initialNodes: Node[] = layouts.map(l => ({
-            id: l._id || 'temp',
+            id: l._id || l.id,
             data: { label: l.name },
             position: { x: 0, y: 0 },
             style: {
@@ -84,14 +84,15 @@ export function FlowMap({ layouts, onEditLayout }: FlowMapProps) {
         const initialEdges: Edge[] = [];
 
         layouts.forEach(l => {
-            if (!l._id) return;
+            const lid = l._id;
+            if (!lid) return;
             l.widgets.forEach(w => {
                 if (w.data?.targetLayoutId) {
                     // Check if target exists
                     if (layouts.find(t => t._id === w.data.targetLayoutId)) {
                         initialEdges.push({
-                            id: `e-${l._id}-${w.id}`,
-                            source: l._id,
+                            id: `e-${lid}-${w.id}`,
+                            source: lid,
                             target: w.data.targetLayoutId,
                             label: w.type === 'NAV_BUTTON' ? (w.data.label || 'LINK') : w.type,
                             animated: true,
@@ -106,8 +107,8 @@ export function FlowMap({ layouts, onEditLayout }: FlowMapProps) {
                     w.data.categories.forEach((cat: any) => {
                         if (cat.targetLayoutId && layouts.find(t => t._id === cat.targetLayoutId)) {
                             initialEdges.push({
-                                id: `e-${l._id}-${cat.id}`,
-                                source: l._id,
+                                id: `e-${lid}-${cat.id}`,
+                                source: lid,
                                 target: cat.targetLayoutId,
                                 label: cat.label || 'Menu',
                                 animated: true,

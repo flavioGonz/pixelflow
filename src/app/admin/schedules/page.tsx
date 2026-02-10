@@ -17,6 +17,8 @@ export default function SchedulesAdminPage() {
     const [allSchedules, setAllSchedules] = useState<any[]>([]);
     const [savedLayouts, setSavedLayouts] = useState<any[]>([]);
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [newScheduleName, setNewScheduleName] = useState('');
 
     const fetchData = useCallback(() => {
         if (socket) {
@@ -64,10 +66,6 @@ export default function SchedulesAdminPage() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <div className={`flex items-center gap-2 px-4 py-2 rounded-full border ${isConnected ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-red-500/10 border-red-500/20 text-red-500'} text-[9px] font-black uppercase tracking-widest`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-                        {isConnected ? 'Sistema Conectado' : 'Sin Conexión'}
-                    </div>
                 </div>
             </header>
 
@@ -80,13 +78,11 @@ export default function SchedulesAdminPage() {
                                 <Box className="w-3 h-3 text-emerald-500" /> Listado de Rutinas
                             </h2>
                             <button
-                                onClick={() => {
-                                    const name = prompt('Nombre del Nuevo Calendario:');
-                                    if (name) socket.emit('save_schedule', { name, events: [] });
-                                }}
-                                className="w-8 h-8 bg-emerald-500 text-white rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:scale-110 active:scale-95 transition-all"
+                                onClick={() => setShowCreateModal(true)}
+                                className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:scale-110 active:scale-95 transition-all group/btn relative overflow-hidden"
                             >
-                                <Plus className="w-4 h-4" />
+                                <Plus className="w-5 h-5 relative z-10" />
+                                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover/btn:translate-y-0 transition-transform" />
                             </button>
                         </div>
 
@@ -161,6 +157,84 @@ export default function SchedulesAdminPage() {
                     </AnimatePresence>
                 </main>
             </div>
+            {/* Create New Schedule Modal */}
+            <AnimatePresence>
+                {showCreateModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            className="bg-[#111] border border-white/10 p-8 rounded-[2rem] max-w-md w-full shadow-2xl relative overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-600" />
+
+                            <div className="flex flex-col items-center text-center gap-6 relative z-10">
+                                <div className="w-20 h-20 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-2 border border-emerald-500/20">
+                                    <Calendar className="w-10 h-10 text-emerald-500" />
+                                </div>
+
+                                <div>
+                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Nueva Rutina</h3>
+                                    <p className="text-sm text-neutral-500 leading-relaxed font-medium mt-1">
+                                        Asigna un nombre descriptivo para organizar tus automatizaciones.
+                                    </p>
+                                </div>
+
+                                <div className="w-full space-y-2">
+                                    <label className="text-[10px] font-black text-neutral-600 uppercase tracking-widest block text-left ml-2">Nombre del Calendario</label>
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={newScheduleName}
+                                        onChange={(e) => setNewScheduleName(e.target.value)}
+                                        placeholder="Ej: Mañanas de Spa, Menú de Noche..."
+                                        className="w-full bg-black/50 border border-white/5 rounded-2xl px-6 py-4 text-white font-bold italic outline-none focus:border-emerald-500/50 transition-all shadow-inner"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newScheduleName.trim()) {
+                                                socket.emit('save_schedule', { name: newScheduleName, events: [] });
+                                                setNewScheduleName('');
+                                                setShowCreateModal(false);
+                                            }
+                                        }}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 w-full mt-4">
+                                    <button
+                                        onClick={() => {
+                                            setShowCreateModal(false);
+                                            setNewScheduleName('');
+                                        }}
+                                        className="py-4 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white font-black uppercase tracking-widest text-[10px] transition-all"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        disabled={!newScheduleName.trim()}
+                                        onClick={() => {
+                                            socket.emit('save_schedule', { name: newScheduleName, events: [] });
+                                            setNewScheduleName('');
+                                            setShowCreateModal(false);
+                                        }}
+                                        className="py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-600/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none"
+                                    >
+                                        Crear Rutina
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Decorative Background Glows */}
+                            <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-emerald-500/10 blur-[60px] rounded-full pointer-events-none" />
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

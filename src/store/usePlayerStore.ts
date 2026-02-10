@@ -16,6 +16,7 @@ export interface WidgetConfig {
 
 export interface LayoutJSON {
     id: string;
+    _id?: string;
     name: string;
     orientation: 'landscape' | 'portrait' | 'both';
     widgets: WidgetConfig[];

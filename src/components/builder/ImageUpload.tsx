@@ -6,9 +6,10 @@ import { Upload, ImageIcon, Loader2 } from 'lucide-react';
 interface ImageUploadProps {
     onUploadSuccess: (url: string) => void;
     label?: string;
+    compact?: boolean;
 }
 
-export function ImageUpload({ onUploadSuccess, label = "Subir Imagen" }: ImageUploadProps) {
+export function ImageUpload({ onUploadSuccess, label = "Subir Imagen", compact = false }: ImageUploadProps) {
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,6 +38,28 @@ export function ImageUpload({ onUploadSuccess, label = "Subir Imagen" }: ImageUp
             setUploading(false);
         }
     };
+
+    if (compact) {
+        return (
+            <>
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white backdrop-blur-md transition-all active:scale-95"
+                    title={label}
+                >
+                    {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                </button>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*,video/*"
+                    className="hidden"
+                />
+            </>
+        );
+    }
 
     return (
         <div className="space-y-2">

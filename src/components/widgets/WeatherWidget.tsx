@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Cloud, Sun, CloudRain, Wind, CloudLightning, CloudSnow, SunMedium, CloudFog, Loader2 } from 'lucide-react';
+import { Cloud, Sun, CloudRain, CloudLightning, CloudSnow, CloudFog, Loader2 } from 'lucide-react';
 
 interface WeatherData {
     temp: number;
@@ -31,7 +31,9 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ data }) => {
             const city = data.city || 'Buenos Aires';
 
             // 1. Geocoding (Free Nominatim API)
-            const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
+            const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`, {
+                headers: { 'User-Agent': 'PixelFlow/1.0' }
+            });
             const geoData = await geoRes.json();
 
             if (!geoData || geoData.length === 0) {
@@ -44,7 +46,13 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ data }) => {
             const weatherRes = await fetch(
                 `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
             );
+
+            if (!weatherRes.ok) throw new Error('Servidor de clima no responde');
+
             const wData = await weatherRes.json();
+
+            if (!wData.current) throw new Error('Datos de clima no disponibles');
+
             const current = wData.current;
 
             // Map WMO Weather Codes
@@ -107,20 +115,20 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ data }) => {
         switch (weather?.condition) {
             case 'SUN':
                 return (
-                    <motion.div {...motionProps} animate={{ ...motionProps.animate, rotate: 360 }} transition={{ rotate: { duration: 20, repeat: Infinity, ease: "linear" }, y: motionProps.transition.y }}>
-                        <SunMedium {...iconProps} className="w-20 h-20 text-amber-400 filter drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]" />
+                    <motion.div {...(motionProps as any)} animate={{ ...(motionProps.animate as any), rotate: 360 }} transition={{ rotate: { duration: 20, repeat: Infinity, ease: "linear" }, y: (motionProps.transition as any).y } as any}>
+                        <Sun {...iconProps} className="w-20 h-20 text-amber-400 filter drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]" />
                     </motion.div>
                 );
             case 'CLOUD_SUN':
                 return (
-                    <motion.div {...motionProps} className="relative">
+                    <motion.div {...(motionProps as any)} className="relative">
                         <Sun className="w-12 h-12 text-amber-400 absolute -top-2 -right-2 animate-pulse" />
                         <Cloud {...iconProps} className="w-20 h-20 text-neutral-300" />
                     </motion.div>
                 );
             case 'RAIN':
                 return (
-                    <motion.div {...motionProps}>
+                    <motion.div {...(motionProps as any)}>
                         <CloudRain {...iconProps} className="w-20 h-20 text-blue-400" />
                         <motion.div
                             animate={{ y: [0, 10, 0], opacity: [0, 1, 0] }}
@@ -133,26 +141,26 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ data }) => {
                 );
             case 'THUNDER':
                 return (
-                    <motion.div {...motionProps}>
+                    <motion.div {...(motionProps as any)}>
                         <CloudLightning {...iconProps} className="w-20 h-20 text-purple-400 filter drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]" />
                     </motion.div>
                 );
             case 'SNOW':
                 return (
-                    <motion.div {...motionProps}>
+                    <motion.div {...(motionProps as any)}>
                         <CloudSnow {...iconProps} className="w-20 h-20 text-white" />
                     </motion.div>
                 );
             case 'FOG':
                 return (
-                    <motion.div {...motionProps}>
+                    <motion.div {...(motionProps as any)}>
                         <CloudFog {...iconProps} className="w-20 h-20 text-neutral-400 opacity-80" />
                     </motion.div>
                 );
             default:
                 return (
-                    <motion.div {...motionProps}>
-                        <SunMedium {...iconProps} />
+                    <motion.div {...(motionProps as any)}>
+                        <Sun {...iconProps} />
                     </motion.div>
                 );
         }

@@ -85,8 +85,8 @@ export default function AdminDashboard() {
         socket.on('schedules_list', (schedules) => setAllSchedules(schedules));
 
         // Initialize with default data
-        const defaultProducts = getDefaultData('PRODUCT_LIST').items;
-        const defaultActivities = getDefaultData('ACTIVITIES').items;
+        const defaultProducts = (getDefaultData('PRODUCT_LIST') as any).items;
+        const defaultActivities = (getDefaultData('ACTIVITIES') as any).items;
         setAllProducts(defaultProducts);
         setAllActivities(defaultActivities);
 
@@ -199,6 +199,7 @@ export default function AdminDashboard() {
             };
             case 'CATEGORY_NAV': return {
                 accentColor: '#3b82f6',
+                template: 'CARDS',
                 categories: [
                     { id: '1', label: 'Kids Club', icon: 'Baby', active: true },
                     { id: '2', label: 'Piscinas', icon: 'Waves', active: false },
@@ -562,7 +563,7 @@ export default function AdminDashboard() {
                         {leftSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
                     </button>
 
-                    <div className="flex-1 overflow-y-auto px-6 py-10 space-y-10 custom-scrollbar min-w-[300px]">
+                    <div className="flex-1 overflow-y-auto px-6 pt-4 pb-10 space-y-10 custom-scrollbar min-w-[300px]">
                         <AnimatePresence mode="wait">
                             {activeTab === 'components' && (
                                 <motion.div
@@ -709,57 +710,50 @@ export default function AdminDashboard() {
                                     transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                                     className="space-y-6"
                                 >
-                                    <div className="sticky top-0 z-20 bg-[#080808] pb-6 space-y-4">
-                                        <div className="flex justify-between items-center gap-4">
-                                            <div className="flex items-center gap-6">
-                                                <h2 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2 italic">
-                                                    <ShoppingBag className="w-4 h-4" /> Catálogo
-                                                </h2>
-                                                <div className="flex bg-black/40 rounded-full p-1 border border-white/5">
-                                                    {(['categories', 'products'] as const).map((view) => (
-                                                        <button
-                                                            key={view}
-                                                            onClick={() => setCatalogView(view)}
-                                                            className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase transition-all ${catalogView === view ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-neutral-500 hover:text-white'}`}
-                                                        >
-                                                            {view === 'categories' ? 'Categorías' : 'Productos'}
-                                                        </button>
-                                                    ))}
-                                                </div>
+                                    <div className="sticky top-0 z-20 bg-[#080808] pt-2 pb-6 space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex bg-black/60 backdrop-blur-md rounded-full p-1.5 border border-white/5 shadow-2xl">
+                                                {(['categories', 'products'] as const).map((view) => (
+                                                    <button
+                                                        key={view}
+                                                        onClick={() => setCatalogView(view)}
+                                                        className={`px-5 py-2 rounded-full text-[10px] font-black uppercase transition-all duration-300 ${catalogView === view ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
+                                                    >
+                                                        {view === 'categories' ? 'Categorías' : 'Productos'}
+                                                    </button>
+                                                ))}
                                             </div>
 
-                                            {catalogView === 'products' ? (
-                                                <button
-                                                    onClick={() => setAllProducts([...allProducts, { id: 'p-' + Date.now(), name: 'PRODUCTO PREMIUM', price: 0, currency: '$', description: '', photo: '', categoryIds: [] }])}
-                                                    className="w-8 h-8 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-lg transition-all flex items-center justify-center border border-emerald-500/20 active:scale-90"
-                                                    title="Nuevo Producto"
-                                                >
-                                                    <Plus className="w-4 h-4" />
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => setAllCategories([...allCategories, { id: 'cat-' + Date.now(), name: 'NUEVA CATEGORÍA', photo: '', description: '' }])}
-                                                    className="w-8 h-8 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white rounded-lg transition-all flex items-center justify-center border border-blue-500/20 active:scale-90"
-                                                    title="Nueva Categoría"
-                                                >
-                                                    <Plus className="w-4 h-4" />
-                                                </button>
-                                            )}
+                                            <button
+                                                onClick={catalogView === 'products'
+                                                    ? () => setAllProducts([...allProducts, { id: 'p-' + Date.now(), name: 'PRODUCTO PREMIUM', price: 0, currency: '$', description: '', photo: '', categoryIds: [] }])
+                                                    : () => setAllCategories([...allCategories, { id: 'cat-' + Date.now(), name: 'NUEVA CATEGORÍA', photo: '', description: '' }])
+                                                }
+                                                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shadow-lg active:scale-90 ${catalogView === 'products' ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white' : 'bg-blue-500/20 text-blue-500 border border-blue-500/20 hover:bg-blue-500 hover:text-white'}`}
+                                            >
+                                                <Plus className="w-5 h-5" />
+                                            </button>
                                         </div>
 
-                                        {catalogView === 'products' && (
-                                            <div className="relative group/adminsearch">
-                                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-focus-within/adminsearch:text-emerald-500 transition-colors" />
-                                                <input
-                                                    type="text"
-                                                    placeholder="BUSCAR PRODUCTOS POR NOMBRE O DESCRIPCIÓN..."
-                                                    className="w-full bg-[#111] border border-white/5 rounded-xl py-3.5 pl-12 pr-6 text-[11px] font-black uppercase tracking-widest outline-none focus:border-emerald-500/30 transition-all placeholder:text-neutral-700 italic"
-                                                    value={adminProductSearch}
-                                                    onChange={(e) => setAdminProductSearch(e.target.value)}
-                                                />
-                                            </div>
-                                        )}
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-6 h-px bg-emerald-500/50" />
+                                            <h2 className="text-[11px] font-black text-emerald-500 uppercase tracking-[0.4em] flex items-center gap-2 italic">
+                                                <ShoppingBag className="w-4 h-4" /> Catálogo
+                                            </h2>
+                                        </div>
                                     </div>
+                                    {catalogView === 'products' && (
+                                        <div className="relative group/adminsearch">
+                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-focus-within/adminsearch:text-emerald-500 transition-colors" />
+                                            <input
+                                                type="text"
+                                                placeholder="BUSCAR PRODUCTOS POR NOMBRE O DESCRIPCIÓN..."
+                                                className="w-full bg-[#111] border border-white/5 rounded-xl py-3.5 pl-12 pr-6 text-[11px] font-black uppercase tracking-widest outline-none focus:border-emerald-500/30 transition-all placeholder:text-neutral-700 italic"
+                                                value={adminProductSearch}
+                                                onChange={(e) => setAdminProductSearch(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
 
                                     <div className="space-y-4 pb-20 overflow-x-hidden">
                                         {catalogView === 'categories' ? (
@@ -1232,9 +1226,14 @@ export default function AdminDashboard() {
                                 selectedId={selectedWidgetId}
                                 onSelect={setSelectedWidgetId}
                                 backgroundImage={backgroundImage}
+                                backgroundVideo={backgroundVideo}
+                                backgroundColor={backgroundColor}
                                 backgroundBlur={backgroundBlur}
+                                backgroundOverlayColor={backgroundOverlayColor}
+                                backgroundOverlayOpacity={backgroundOverlayOpacity}
+                                backgroundPattern={backgroundPattern}
+                                backgroundPatternOpacity={backgroundPatternOpacity}
                             />
-
                             {/* Visual Hint */}
                             {!selectedWidgetId && widgets.length > 0 && (
                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-3">
@@ -1443,6 +1442,11 @@ export default function AdminDashboard() {
                                                                             <option value="FLOATING">Burbujas (Iconos)</option>
                                                                             <option value="GLAS_TILES">Glass Tiles (Modern)</option>
                                                                             <option value="STRIPS">Strips (Horizontal)</option>
+                                                                            <option value="NEON_GLOW">Neon Glow (Futurista)</option>
+                                                                            <option value="BRUTALIST">Brutalist (Retro)</option>
+                                                                            <option value="HOLOGRAPHIC">Holographic (Iridiscente)</option>
+                                                                            <option value="MAC_DOCK">Mac Dock (Premium)</option>
+                                                                            <option value="BENTO">Bento Grid (Layout)</option>
                                                                         </select>
                                                                     </div>
                                                                     <div>
@@ -1789,7 +1793,7 @@ export default function AdminDashboard() {
                                                                         <span className="text-[10px] font-black text-neutral-400 uppercase italic group-hover/catcheck:text-blue-400 transition-colors">{cat.name}</span>
                                                                         <input
                                                                             type="checkbox"
-                                                                            checked={selectedWidget.data.categoriesToShow?.includes(cat.id)}
+                                                                            checked={selectedWidget.data.categoriesToShow?.includes(cat.id) || false}
                                                                             onChange={(e) => {
                                                                                 const current = selectedWidget.data.categoriesToShow || [];
                                                                                 const next = e.target.checked
@@ -1875,7 +1879,7 @@ export default function AdminDashboard() {
                                                         <div>
                                                             <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Mensaje de la Cinta</label>
                                                             <textarea
-                                                                value={selectedWidget.data.text}
+                                                                value={selectedWidget.data.text || ''}
                                                                 onChange={(e) => updateSelectedWidgetData({ text: e.target.value })}
                                                                 className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-bold text-white outline-none min-h-[120px] focus:border-blue-500"
                                                             />
@@ -1897,15 +1901,15 @@ export default function AdminDashboard() {
                                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                                                         <div>
                                                             <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Fecha Objetivo</label>
-                                                            <input type="datetime-local" value={selectedWidget.data.targetDate?.substring(0, 16)} onChange={(e) => updateSelectedWidgetData({ targetDate: new Date(e.target.value).toISOString() })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white" />
+                                                            <input type="datetime-local" value={selectedWidget.data.targetDate?.substring(0, 16) || ''} onChange={(e) => updateSelectedWidgetData({ targetDate: new Date(e.target.value).toISOString() })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white" />
                                                         </div>
                                                         <div>
                                                             <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Título Superior</label>
-                                                            <input type="text" value={selectedWidget.data.title} onChange={(e) => updateSelectedWidgetData({ title: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
+                                                            <input type="text" value={selectedWidget.data.title || ''} onChange={(e) => updateSelectedWidgetData({ title: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
                                                         </div>
                                                         <div>
                                                             <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Nombre del Evento</label>
-                                                            <input type="text" value={selectedWidget.data.subtitle} onChange={(e) => updateSelectedWidgetData({ subtitle: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
+                                                            <input type="text" value={selectedWidget.data.subtitle || ''} onChange={(e) => updateSelectedWidgetData({ subtitle: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
                                                         </div>
                                                     </div>
                                                 )}
@@ -1937,15 +1941,15 @@ export default function AdminDashboard() {
                                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                                                         <div>
                                                             <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Canción / Radio</label>
-                                                            <input type="text" value={selectedWidget.data.song} onChange={(e) => updateSelectedWidgetData({ song: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
+                                                            <input type="text" value={selectedWidget.data.song || ''} onChange={(e) => updateSelectedWidgetData({ song: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
                                                         </div>
                                                         <div>
                                                             <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Créditos</label>
-                                                            <input type="text" value={selectedWidget.data.artist} onChange={(e) => updateSelectedWidgetData({ artist: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
+                                                            <input type="text" value={selectedWidget.data.artist || ''} onChange={(e) => updateSelectedWidgetData({ artist: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
                                                         </div>
                                                         <div>
                                                             <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Color Visualizer</label>
-                                                            <input type="color" value={selectedWidget.data.accentColor} onChange={(e) => updateSelectedWidgetData({ accentColor: e.target.value })} className="w-full h-10 bg-transparent cursor-pointer" />
+                                                            <input type="color" value={selectedWidget.data.accentColor || '#10b981'} onChange={(e) => updateSelectedWidgetData({ accentColor: e.target.value })} className="w-full h-10 bg-transparent cursor-pointer" />
                                                         </div>
                                                     </div>
                                                 )}
@@ -2007,7 +2011,7 @@ export default function AdminDashboard() {
                                                                         <div className="flex gap-2">
                                                                             <input
                                                                                 className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-black italic outline-none text-white focus:border-blue-500/50"
-                                                                                value={item.name}
+                                                                                value={item.name || ''}
                                                                                 onChange={(e) => {
                                                                                     const newItems = [...selectedWidget.data.items];
                                                                                     newItems[idx].name = e.target.value;
@@ -2016,7 +2020,7 @@ export default function AdminDashboard() {
                                                                             />
                                                                             <input
                                                                                 className="w-24 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-black text-blue-500 outline-none"
-                                                                                value={item.price}
+                                                                                value={item.price || ''}
                                                                                 onChange={(e) => {
                                                                                     const newItems = [...selectedWidget.data.items];
                                                                                     newItems[idx].price = e.target.value;
@@ -2026,7 +2030,7 @@ export default function AdminDashboard() {
                                                                         </div>
                                                                         <textarea
                                                                             className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] text-neutral-400 outline-none h-12 resize-none"
-                                                                            value={item.description}
+                                                                            value={item.description || ''}
                                                                             onChange={(e) => {
                                                                                 const newItems = [...selectedWidget.data.items];
                                                                                 newItems[idx].description = e.target.value;

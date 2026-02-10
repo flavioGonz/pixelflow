@@ -24,7 +24,7 @@ const SliderWidget: React.FC<SliderWidgetProps> = ({ data }) => {
         <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] as any }}
             className="w-full h-full relative group overflow-hidden bg-transparent"
             style={{ backgroundColor: 'transparent' }}
         >

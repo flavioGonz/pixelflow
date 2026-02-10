@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { ShoppingBag, ArrowLeft, Star, Award, Leaf, ChevronRight, Search } from 'lucide-react';
-import { usePlayerStore } from '@/store/usePlayerStore';
 
 interface Category {
     id: string;
@@ -66,14 +65,14 @@ const ProductListWidget: React.FC<ProductListWidgetProps> = ({ data }) => {
             item.categoryIds?.some(id => data.categoriesToShow?.includes(id));
 
         const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+            item.description?.toLowerCase()?.includes(searchQuery.toLowerCase());
 
         return matchesCategory && matchesSearch && isAllowedByWidget;
     }) || [];
 
-    const cinematicEase = [0.16, 1, 0.3, 1];
+    const cinematicEase: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
-    const containerVariants = {
+    const containerVariants: Variants = {
         hidden: { opacity: 0, scale: 0.98 },
         visible: {
             opacity: 1,
@@ -91,7 +90,7 @@ const ProductListWidget: React.FC<ProductListWidgetProps> = ({ data }) => {
         }
     };
 
-    const itemVariants = {
+    const itemVariants: Variants = {
         hidden: { opacity: 0, y: 15, scale: 0.98 },
         visible: {
             opacity: 1,
@@ -230,7 +229,7 @@ const ProductListWidget: React.FC<ProductListWidgetProps> = ({ data }) => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div >
+        </div>
     );
 };
 

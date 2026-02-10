@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Clock, ChevronRight, Sparkles, MapPin, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
+import { Calendar, Sparkles } from 'lucide-react';
 
 interface ActivityItem {
     category: string;
@@ -29,7 +29,7 @@ const ActivitiesWidget: React.FC<ActivitiesWidgetProps> = ({ data }) => {
         return true;
     }) || [];
 
-    const containerVariants = {
+    const containerVariants: Variants = {
         hidden: { opacity: 0 },
         visible: {
             opacity: 1,
@@ -37,7 +37,7 @@ const ActivitiesWidget: React.FC<ActivitiesWidgetProps> = ({ data }) => {
         }
     };
 
-    const itemVariants = {
+    const itemVariants: Variants = {
         hidden: { y: 20, opacity: 0, scale: 0.98 },
         visible: {
             y: 0,
@@ -137,7 +137,7 @@ const ActivitiesWidget: React.FC<ActivitiesWidgetProps> = ({ data }) => {
             </motion.div>
 
 
-        </motion.div >
+        </motion.div>
     );
 };
 

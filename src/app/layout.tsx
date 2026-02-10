@@ -3,7 +3,24 @@ import "./globals.css";
 
 export const metadata: Metadata = {
     title: "PixelFlow Player",
-    description: "Next Generation Digital Signage",
+    description: "Next Generation Digital Signage Platform",
+    manifest: "/manifest.json",
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "default",
+        title: "PixelFlow",
+    },
+    formatDetection: {
+        telephone: false,
+    },
+};
+
+export const viewport = {
+    themeColor: "#000000",
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
 };
 
 export default function RootLayout({
@@ -13,7 +30,24 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className="bg-black">{children}</body>
+            <body className="bg-black">
+                {children}
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                    console.log('SW Registered', reg);
+                  }).catch(function(err) {
+                    console.log('SW Registration Failed', err);
+                  });
+                });
+              }
+            `,
+                    }}
+                />
+            </body>
         </html>
     );
 }

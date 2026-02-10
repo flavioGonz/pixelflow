@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, TargetAndTransition } from 'framer-motion';
 import { ArrowLeft, Home, ChevronRight, Zap, Play, Info } from 'lucide-react';
 import { usePlayerStore } from '@/store/usePlayerStore';
 import { io } from 'socket.io-client';
@@ -44,7 +44,7 @@ const NavButtonWidget: React.FC<NavButtonWidgetProps> = ({ data }) => {
     };
 
     // Fast and snappy interactions
-    const tapAnimation = {
+    const tapAnimation: TargetAndTransition = {
         scale: 0.9,
         transition: { type: 'spring', stiffness: 600, damping: 20 }
     };

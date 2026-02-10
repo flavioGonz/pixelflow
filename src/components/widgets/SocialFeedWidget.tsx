@@ -79,7 +79,7 @@ const SocialFeedWidget: React.FC<SocialFeedWidgetProps> = ({ data }) => {
                     initial={{ opacity: 0, y: 50, rotate: -2 }}
                     animate={{ opacity: 1, y: 0, rotate: 0 }}
                     exit={{ opacity: 0, y: -50, rotate: 2 }}
-                    transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] as any }}
                     className="w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.5)] flex flex-col"
                 >
                     {/* Header */}

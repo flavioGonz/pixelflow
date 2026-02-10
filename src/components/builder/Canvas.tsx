@@ -14,7 +14,12 @@ interface CanvasProps {
     orientation: 'landscape' | 'portrait';
     backgroundImage?: string;
     backgroundVideo?: string;
+    backgroundColor?: string;
     backgroundBlur?: number;
+    backgroundOverlayColor?: string;
+    backgroundOverlayOpacity?: number;
+    backgroundPattern?: 'none' | 'dots' | 'grid' | 'waves' | 'noise';
+    backgroundPatternOpacity?: number;
 }
 
 export function Canvas({
@@ -25,7 +30,12 @@ export function Canvas({
     orientation,
     backgroundImage,
     backgroundVideo,
-    backgroundBlur = 0
+    backgroundColor = '#000',
+    backgroundBlur = 0,
+    backgroundOverlayColor,
+    backgroundOverlayOpacity = 0.5,
+    backgroundPattern = 'none',
+    backgroundPatternOpacity = 0.2
 }: CanvasProps) {
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -75,6 +85,13 @@ export function Canvas({
 
     const aspectRatio = orientation === 'landscape' ? 'aspect-video' : 'aspect-[9/16]';
 
+    const Patterns = {
+        dots: "radial-gradient(circle, currentColor 1px, transparent 1px)",
+        grid: "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
+        waves: "radial-gradient(circle at 100% 150%, transparent 24%, currentColor 25%, currentColor 28%, transparent 29%, transparent 36%, currentColor 36%, currentColor 40%, transparent 41%, transparent)",
+        noise: "url('https://grainy-gradients.vercel.app/noise.svg')",
+    };
+
     return (
         <div
             className="w-full flex justify-center items-center py-10"
@@ -83,7 +100,7 @@ export function Canvas({
             <div
                 id="builder-canvas"
                 style={{
-                    backgroundColor: '#000',
+                    backgroundColor: backgroundColor,
                 }}
                 className={`relative shadow-2xl rounded-sm border border-neutral-800 w-full max-w-4xl overflow-hidden ${aspectRatio}`}
             >
@@ -115,17 +132,42 @@ export function Canvas({
                     ) : null}
                 </div>
 
+                {/* Overlay Layer */}
+                {backgroundOverlayColor && (
+                    <div
+                        className="absolute inset-0 z-[1] pointer-events-none"
+                        style={{
+                            backgroundColor: backgroundOverlayColor,
+                            opacity: backgroundOverlayOpacity
+                        }}
+                    />
+                )}
+
+                {/* Pattern Layer */}
+                {backgroundPattern && backgroundPattern !== 'none' && (
+                    <div
+                        className="absolute inset-0 z-[2] pointer-events-none opacity-[0.2]"
+                        style={{
+                            backgroundImage: Patterns[backgroundPattern as keyof typeof Patterns],
+                            backgroundSize: backgroundPattern === 'noise' ? 'auto' : '40px 40px',
+                            color: backgroundOverlayColor || '#fff',
+                            opacity: backgroundPatternOpacity,
+                            mixBlendMode: 'overlay'
+                        }}
+                    />
+                )}
+
                 {backgroundBlur > 0 && (
                     <div
-                        className="absolute inset-0 backdrop-blur-md pointer-events-none z-[1]"
+                        className="absolute inset-0 backdrop-blur-md pointer-events-none z-[5]"
                         style={{ backdropFilter: `blur(${backgroundBlur}px)` }}
                     />
                 )}
-                {/* Grid Background */}
-                <div className="absolute inset-0 opacity-10 pointer-events-none"
+                {/* Editor Grid Helper */}
+                <div className="absolute inset-0 opacity-5 pointer-events-none z-[10]"
                     style={{
                         backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)',
-                        backgroundSize: '20px 20px'
+                        backgroundSize: '40px 40px'
                     }}
                 />
 
