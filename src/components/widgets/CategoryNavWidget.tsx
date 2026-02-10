@@ -103,7 +103,7 @@ const CategoryNavWidget: React.FC<CategoryNavWidgetProps> = ({ data }) => {
             scale: 0.92,
             y: 4,
             filter: 'brightness(0.8)',
-            transition: { duration: 0.1, ease: 'easeInOut' }
+            transition: { duration: 0.1, ease: 'easeInOut' as const }
         };
 
         // --- TEMPLATES ---
