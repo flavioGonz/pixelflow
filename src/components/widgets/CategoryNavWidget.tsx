@@ -60,7 +60,16 @@ const CategoryNavWidget: React.FC<CategoryNavWidgetProps> = ({ data }) => {
         ? { type: 'tween' as const, duration: 0.2 }
         : { type: 'spring' as const, stiffness: 400, damping: 30, mass: 1 };
 
+    const playClickSound = () => {
+        try {
+            const audio = new Audio('/sounds/click.mp3'); // We will ensure this file exists or use a base64 fallback
+            audio.volume = 0.5;
+            audio.play().catch(e => console.error("Audio play failed", e));
+        } catch (e) { console.error("Audio error", e) }
+    };
+
     const handleCategoryClick = (cat: CategoryItem) => {
+        playClickSound(); // Play sound on interaction
         if (isAdmin) {
             setSelectedCategory(cat.label);
             return;
@@ -89,7 +98,13 @@ const CategoryNavWidget: React.FC<CategoryNavWidgetProps> = ({ data }) => {
             }
         };
 
-        const tapEffect = { scale: 0.94, y: 5 };
+        // Stronger tactile feel: Scale down more, move down slightly implies physical button press
+        const tapEffect = {
+            scale: 0.92,
+            y: 4,
+            filter: 'brightness(0.8)',
+            transition: { duration: 0.1, ease: 'easeInOut' }
+        };
 
         // --- TEMPLATES ---
 
