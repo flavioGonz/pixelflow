@@ -9,7 +9,7 @@ import {
     Database, RefreshCw, Eye, MousePointer2, Box, Palette,
     ChevronRight, ChevronLeft, Zap, Globe, Image as ImageIcon, Sparkles, ArrowLeft, Copy, Network, Clock, Search,
     Megaphone, Instagram, PlaneTakeoff, Music, PanelLeftClose, PanelRightClose, PanelLeftOpen, PanelRightOpen,
-    ChevronDown, Link as LinkIcon, Calendar
+    ChevronDown, Link as LinkIcon, Calendar, LogOut
 } from 'lucide-react';
 import { Canvas } from '@/components/builder/Canvas';
 import { RichTextEditor } from '@/components/builder/RichTextEditor';
@@ -18,6 +18,7 @@ import { FlowMap } from '@/components/admin/FlowMap';
 import { ScheduleCanvas } from '@/components/admin/ScheduleCanvas';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 let socket: Socket;
 
@@ -42,6 +43,7 @@ export default function AdminDashboard() {
     const [layoutToDelete, setLayoutToDelete] = useState<any>(null);
     const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+    const router = useRouter();
 
     // DB States
     const [savedLayouts, setSavedLayouts] = useState<any[]>([]);
@@ -363,6 +365,15 @@ export default function AdminDashboard() {
                             <ArrowLeft className="w-4 h-4" /> Volver
                         </button>
                     </Link>
+                    <button
+                        onClick={async () => {
+                            await fetch('/api/auth/logout', { method: 'POST' });
+                            router.push('/login');
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white font-bold uppercase border border-red-500/20 shadow-lg active:scale-95 transition-all text-xs"
+                    >
+                        <LogOut className="w-4 h-4" /> Cerrar Sesión
+                    </button>
                     <div className="h-8 w-[1px] bg-white/10" />
                     <motion.div
                         initial={{ rotate: -10 }}

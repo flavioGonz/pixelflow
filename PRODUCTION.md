@@ -25,6 +25,13 @@ cd pixelflow
 sudo bash scripts/setup_debian.sh
 ```
 
+## 2.1. Crear Usuario Administrador (IMPORTANTE)
+Antes de iniciar la aplicación por primera vez, debes crear el usuario administrador por defecto:
+```bash
+# Crear usuario admin@pixelflow.com / admin123
+node seed-admin.js
+```
+
 ## 3. Configuración del Proyecto
 ```bash
 # Instalar dependencias de Node

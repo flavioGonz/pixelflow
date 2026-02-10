@@ -11,6 +11,12 @@ const multer = require('multer');
 const path = require('path');
 const express = require('express');
 const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+const User = require('./src/models/User');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 const dev = process.env.NODE_ENV !== 'production';
 const nextApp = next({ dev });
@@ -45,6 +51,66 @@ nextApp.prepare().then(() => {
     expressApp.use((req, res, next) => {
         // console.log(`${req.method} ${req.url}`);
         next();
+    });
+
+    expressApp.use(express.json());
+    expressApp.use(cookieParser());
+
+    // --- AUTHENTICATION ROUTES ---
+
+    expressApp.post('/api/auth/login', async (req, res) => {
+        try {
+            const { email, password } = req.body;
+            const user = await User.findOne({ email });
+
+            if (!user) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '1d' });
+
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: 24 * 60 * 60 * 1000, // 1 day
+                sameSite: 'strict'
+            });
+
+            res.json({ user: { email: user.email } });
+        } catch (error) {
+            console.error('Login error:', error);
+            res.status(500).json({ error: 'Server error' });
+        }
+    });
+
+    expressApp.post('/api/auth/logout', (req, res) => {
+        res.clearCookie('token');
+        res.json({ message: 'Logged out' });
+    });
+
+    expressApp.get('/api/auth/me', async (req, res) => {
+        try {
+            const token = req.cookies.token;
+            if (!token) {
+                return res.status(401).json({ error: 'Not authenticated' });
+            }
+
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const user = await User.findById(decoded.userId).select('-password');
+
+            if (!user) {
+                return res.status(401).json({ error: 'User not found' });
+            }
+
+            res.json({ user });
+        } catch (error) {
+            res.status(401).json({ error: 'Invalid token' });
+        }
     });
 
     // Serve static files from /uploads
