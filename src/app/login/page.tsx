@@ -66,14 +66,14 @@ export default function LoginPage() {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
-                                    placeholder="admin@pixelflow.com"
+                                    placeholder="email@ejemplo.com"
                                     required
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-zinc-300 ml-1">Password</label>
+                            <label className="text-sm font-medium text-zinc-300 ml-1">Contraseña</label>
                             <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Lock className="h-5 w-5 text-zinc-500 group-focus-within:text-purple-400 transition-colors" />

@@ -38,7 +38,7 @@ export default function AdminDashboard() {
     const [backgroundPattern, setBackgroundPattern] = useState<'none' | 'dots' | 'grid' | 'waves' | 'noise'>('none');
     const [backgroundPatternOpacity, setBackgroundPatternOpacity] = useState(0.2);
     const [editingLayoutId, setEditingLayoutId] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'screens' | 'layouts' | 'components' | 'products' | 'activities' | 'flow'>('components');
+    const [activeTab, setActiveTab] = useState<'screens' | 'layouts' | 'components' | 'products' | 'activities' | 'flow' | 'settings'>('components');
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [layoutToDelete, setLayoutToDelete] = useState<any>(null);
     const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -550,7 +550,10 @@ export default function AdminDashboard() {
                         </button>
                     </Link>
                     <div className="mt-auto">
-                        <button className="p-3 text-neutral-600 hover:text-white transition-colors">
+                        <button
+                            onClick={() => setActiveTab('settings')}
+                            className={`p-3 rounded-md transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-600 hover:text-white hover:bg-white/5'}`}
+                        >
                             <Settings2 className="w-6 h-6" />
                         </button>
                     </div>
@@ -2309,6 +2312,117 @@ export default function AdminDashboard() {
                                 </div>
                             )
                         }
+
+                        {activeTab === 'settings' && (
+                            <motion.div
+                                key="settings"
+                                initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
+                                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                                exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
+                                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                                className="space-y-6"
+                            >
+                                <div className="sticky top-0 z-20 bg-[#080808] pb-6">
+                                    <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em] flex items-center gap-2">
+                                        <Settings2 className="w-3 h-3" /> Configuración
+                                    </h2>
+                                </div>
+
+                                <div className="bg-[#111] p-6 rounded-xl border border-white/5 space-y-6">
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className="p-3 bg-blue-500/10 rounded-lg">
+                                            <Lock className="w-6 h-6 text-blue-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-white italic tracking-tighter uppercase">Seguridad</h3>
+                                            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Gestionar acceso y credenciales</p>
+                                        </div>
+                                    </div>
+
+                                    <form onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        const form = e.target as HTMLFormElement;
+                                        const currentPassword = (form.elements.namedItem('currentPassword') as HTMLInputElement).value;
+                                        const newPassword = (form.elements.namedItem('newPassword') as HTMLInputElement).value;
+
+                                        try {
+                                            const res = await fetch('/api/auth/change-password', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ currentPassword, newPassword })
+                                            });
+
+                                            if (res.ok) {
+                                                alert('Contraseña actualizada correctamente');
+                                                form.reset();
+                                            } else {
+                                                const data = await res.json();
+                                                alert(data.error || 'Error al actualizar la contraseña');
+                                            }
+                                        } catch (err) {
+                                            alert('Error de conexión');
+                                        }
+                                    }} className="max-w-md">
+                                        <div className="space-y-5">
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] text-neutral-400 font-black uppercase tracking-widest ml-1">Contraseña Actual</label>
+                                                <div className="relative group">
+                                                    <input
+                                                        name="currentPassword"
+                                                        type="password"
+                                                        className="w-full bg-black/40 border border-white/10 rounded-lg pl-4 pr-4 py-3 text-xs font-bold text-white focus:border-blue-500/50 outline-none transition-all focus:bg-blue-900/10"
+                                                        placeholder="••••••••"
+                                                        required
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] text-neutral-400 font-black uppercase tracking-widest ml-1">Nueva Contraseña</label>
+                                                <div className="relative group">
+                                                    <input
+                                                        name="newPassword"
+                                                        type="password"
+                                                        className="w-full bg-black/40 border border-white/10 rounded-lg pl-4 pr-4 py-3 text-xs font-bold text-white focus:border-blue-500/50 outline-none transition-all focus:bg-blue-900/10"
+                                                        placeholder="Nueva contraseña segura"
+                                                        required
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-900/20 active:scale-95 flex items-center justify-center gap-2 mt-2"
+                                            >
+                                                <Save className="w-4 h-4" /> Actualizar Credenciales
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <div className="bg-[#111] p-6 rounded-xl border border-white/5 flex items-center justify-between group hover:border-white/10 transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-neutral-800 rounded-lg">
+                                            <Monitor className="w-6 h-6 text-neutral-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-black text-white italic tracking-wider uppercase mb-1">PixelFlow Core</h3>
+                                            <div className="flex gap-3 text-[9px] text-neutral-500 font-mono font-bold uppercase tracking-widest">
+                                                <span>v2.0.0 PRO</span>
+                                                <span className="text-neutral-700">|</span>
+                                                <span>Build 2024.10</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
+                                        <span className="text-[9px] font-black text-green-500 uppercase tracking-wider flex items-center gap-1.5">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                            Sistema Activo
+                                        </span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
                     </div>
                 </motion.aside >
             </div >
