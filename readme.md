@@ -1,61 +1,97 @@
-# PixelFlow - Digital Signage High-Performance Platform
+# 🚀 PixelFlow - Plataforma de Proyección Digital (SaaS)
 
-PixelFlow es una solución de señalización digital interactiva y en tiempo real de alto rendimiento. Permite el diseño remoto de lienzos (layouts) y su publicación instantánea en pantallas táctiles (Kioscos, TVs), con soporte nativo para orientaciones Landscape (16:9) y Portrait (9:16).
+![PixelFlow Hero](https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=2000)
 
-## 🚀 Stack Tecnológico
+**PixelFlow** es una solución de señalización digital (Digital Signage) de alto rendimiento, diseñada para transformar cualquier pantalla en un canal dinámico de comunicación. Ideal para restaurantes, gimnasios, oficinas corporativas y centros de eventos.
 
-*   **Core:** Next.js 14 (App Router), Node.js Express (Custom Server).
-*   **Real-time:** Socket.io (Comunicación bidireccional instantánea).
-*   **Motor Gráfico:** Framer Motion (Animaciones de 60fps), Swiper.js (Carruseles).
-*   **Estilos:** Tailwind CSS (Diseño Premium & Glassmorphism).
-*   **APIs Externas:** Open-Meteo & Nominatim (Clima en vivo), YouTube Embed API.
-*   **Persistencia:** MongoDB (Mongoose) para Layouts y Gestión de Pantallas.
+---
 
-## 🛠️ Instalación y Configuración
+## ✨ Características Principales
 
-1.  **Instalar Dependencias:**
-    ```bash
-    npm install
-    ```
+### 🎨 Editor de Layouts en Tiempo Real
+Diseña la cuadrícula de tu contenido con precisión de píxel. Arrastra, suelta y configura widgets dinámicos sin necesidad de recargar la pantalla.
 
-2.  **Variables de Entorno (.env):**
-    Configura tu `MONGODB_URI` y `PORT` (3000 por defecto).
+### 🕒 Cronogramas Inteligentes
+Programa qué contenido se muestra y cuándo. Gestión automática de rutinas horarias para que tu publicidad nunca se detenga.
 
-3.  **Ejecutar en Desarrollo:**
-    *Importante: Usamos un servidor personalizado para manejar WebSockets. No uses `next dev` directamente.*
-    ```bash
-    node server.js
-    ```
-    Accede a:
-    *   **Admin:** `http://localhost:3000/admin`
-    *   **Player:** `http://localhost:3000/player/[ID_PANTALLA]`
+### 🖥️ Control de Pantallas Remoto
+Autoriza y gestiona múltiples terminales desde un panel centralizado. Visualiza en tiempo real el estado de conexión de cada pantalla (Online/Offline).
 
-## 🔌 Documentación de APIs y Sockets
+### 🍔 Catálogo de Productos y Actividades
+Módulo especializado para menús digitales y agendas de eventos, con actualización instantánea en todas las pantallas vinculadas.
 
-### Endpoints Express
-*   **POST `/api/upload`**: Recibe archivos (imágenes/videos) mediante `multer`. Devuelve la URL local del recurso.
+### ⚡ Tecnología Ultra-Rápida
+Construido sobre WebSockets para una sincronización instantánea. Si cambias un precio en el panel, se cambia en el local en milisegundos.
 
-### Eventos de Socket (Comunicación en Tiempo Real)
-*   **`register_screen`**: El Player se registra con su ID único.
-*   **`save_layout`**: El Admin guarda un diseño en la base de datos y lo vincula a una pantalla.
-*   **`update_content`**: Empuja cambios en vivo del Admin al Player (modo preview).
-*   **`request_layout`**: Navegación interactiva. Solicita un diseño específico para una pantalla.
-*   **`authorize_screen`**: Permite o revoca el acceso de una pantalla desde el Admin.
-*   **`update_layout` (Server -> Player)**: Envía el JSON completo del diseño para ser renderizado.
+---
 
-## 📱 Características Destacadas (Updates de Hoy)
+## 🛠️ Stack Tecnológico
 
-*   **Motor de Transparencia PNG:** Soporte total para canales alfa. Los logos y elementos PNG flotan sin fondos negros.
-*   **Capas de Diseño (Masks):** Sistema de overlays de color y patrones animados (Dots, Grid, Waves, Noise) sobre fondos de video/imagen.
-*   **Clima Inteligente:** Widget con auto-geolocalización y clima en vivo con iconos coloridos y animados.
-*   **Botones con Templates:** 5 estilos táctiles (Glass, Neon, 3D, Minimal, Gradient) con feedback de presión inmediato.
-*   **Optimización de Velocidad:** Transiciones cinemáticas ultra-rápidas (0.4s) y animaciones de entrada "snappy" (0.05s stagger).
-*   **Agenda por Sección:** Filtrado inteligente de actividades dinámicas según la ubicación de la pantalla.
+| Front-end | Back-end | Real-time | Database |
+| :--- | :--- | :--- | :--- |
+| **Next.js 16** | **Express.js** | **Socket.io** | **MongoDB** |
+| Tailwind CSS | Node.js | WebSockets | Mongoose |
+| Framer Motion | JWT Auth | | |
 
-## 📂 Estructura del Proyecto
+---
 
-*   **`server.js`**: Punto de entrada del servidor. Gestiona Next.js + Socket.io + Multer.
-*   **`src/app/admin`**: Panel de control y editor Drag & Drop.
-*   **`src/app/player/[id]`**: Motor de renderizado del Player interactivo.
-*   **`src/components/widgets`**: Catálogo de componentes visuales (Clima, Carta, Agenda, Sliders).
-*   **`src/store`**: Estado global del reproductor con Zustand.
+## 📸 Screenshots del Producto
+
+> ¡Wau! Mira nuestra nueva interfaz premium.
+
+### Tablero de Control
+<kbd>![Dashboard](https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=1000)</kbd>
+
+### Gestión de Actividades
+*Interfaz técnica con diseño oscuro y controles de precisión.*
+
+### Editor de Pantallas
+*Autorización segura mediante Shields e indicadores de pulso online.*
+
+---
+
+## 🚀 Instalación Rápida (Para Desarrolladores)
+
+1. **Clonar el repositorio**
+   ```bash
+   git clone https://github.com/flavioGonz/pixelflow.git
+   cd pixelflow
+   ```
+
+2. **Instalar dependencias**
+   ```bash
+   npm install
+   ```
+
+3. **Variables de Entorno**
+   Crea un archivo `.env` en la raíz:
+   ```env
+   MONGODB_URI=tu_mongo_uri
+   JWT_SECRET=tu_secreto_super_seguro
+   PORT=3000
+   ```
+
+4. **Lanzar en desarrollo**
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 💼 Perfil Comercial
+
+PixelFlow está listo para ser comercializado como un producto **SaaS (Software as a Service)** o **On-Premise**. 
+
+- **Escalable:** Soporta cientos de pantallas simultáneas.
+- **Personalizable:** Marca blanca disponible para distribuidores.
+- **PWA Ready:** Las pantallas pueden funcionar como aplicaciones nativas en Smart TVs y tablets.
+
+---
+
+## 👤 Autor
+
+Desarrollado con ❤️ por **[Flavio Gonzalez](https://github.com/flavioGonz)**.
+
+---
+
+© 2026 PixelFlow. Todos los derechos reservados.
