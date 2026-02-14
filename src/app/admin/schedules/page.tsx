@@ -76,7 +76,7 @@ export default function SchedulesAdminPage() {
                     <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
                         <div className="flex justify-between items-center">
                             <h2 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 leading-none">
-                                <Box className="w-3 h-3 text-emerald-500" /> Listado de Rutinas
+                                <Calendar className="w-3 h-3 text-emerald-500" /> Listado de Rutinas
                             </h2>
                             <button
                                 onClick={() => setShowCreateModal(true)}
