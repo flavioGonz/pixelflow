@@ -1,58 +1,48 @@
-# 🚀 PixelFlow - Plataforma de Proyección Digital (SaaS)
+# 🚀 PixelFlow - Plataforma de Señalización Digital (SaaS)
 
-![PixelFlow Hero](https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=2000)
+![PixelFlow Hero](docs/images/splash.png)
 
-**PixelFlow** es una solución de señalización digital (Digital Signage) de alto rendimiento, diseñada para transformar cualquier pantalla en un canal dinámico de comunicación. Ideal para restaurantes, gimnasios, oficinas corporativas y centros de eventos.
+**PixelFlow** es una solución de señalización digital (Digital Signage) de alto impacto, diseñada para transformar cualquier pantalla en un canal dinámico y profesional de comunicación. Ideal para hostelería, gimnasios, oficinas y retail.
 
 ---
 
 ## ✨ Características Principales
 
-### 🎨 Editor de Layouts en Tiempo Real
-Diseña la cuadrícula de tu contenido con precisión de píxel. Arrastra, suelta y configura widgets dinámicos sin necesidad de recargar la pantalla.
+### 🎨 PixelFlow Studio (Editor Maestro)
+Diseña la cuadrícula de tu contenido con precisión absoluta. Gestiona widgets dinámicos y publica cambios al instante sin recargas.
+![Editor](docs/images/editor.png)
 
-### 🕒 Cronogramas Inteligentes
-Programa qué contenido se muestra y cuándo. Gestión automática de rutinas horarias para que tu publicidad nunca se detenga.
+### 🕒 Gestión de Cronogramas
+Automatiza tu comunicación. Programa rutinas horarias, eventos especiales y cronogramas de actividades de forma intuitiva.
 
-### 🖥️ Control de Pantallas Remoto
-Autoriza y gestiona múltiples terminales desde un panel centralizado. Visualiza en tiempo real el estado de conexión de cada pantalla (Online/Offline).
+### 🖥️ Monitoreo de Pantallas en Tiempo Real
+Controla y autoriza terminales de forma remota. Estado de conexión vivo, métricas de actividad y gestión de accesos con un solo clic.
 
-### 🍔 Catálogo de Productos y Actividades
-Módulo especializado para menús digitales y agendas de eventos, con actualización instantánea en todas las pantallas vinculadas.
+### 🍱 Catálogos Dinámicos
+Módulos dedicados para Menú de Productos y Agendas de Actividades, optimizados para lectura en pantallas de gran formato.
 
-### ⚡ Tecnología Ultra-Rápida
-Construido sobre WebSockets para una sincronización instantánea. Si cambias un precio en el panel, se cambia en el local en milisegundos.
-
----
-
-## 🛠️ Stack Tecnológico
-
-| Front-end | Back-end | Real-time | Database |
-| :--- | :--- | :--- | :--- |
-| **Next.js 16** | **Express.js** | **Socket.io** | **MongoDB** |
-| Tailwind CSS | Node.js | WebSockets | Mongoose |
-| Framer Motion | JWT Auth | | |
+### 🔐 Seguridad y Perfiles
+Acceso administrativo protegido y gestión de perfiles de usuario avanzada para mantener el control total de tu red.
+![Login](docs/images/login.png)
 
 ---
 
-## 📸 Screenshots del Producto
+## 🛠️ Stack Tecnológico Premium
 
-> ¡Wau! Mira nuestra nueva interfaz premium.
-
-### Tablero de Control
-<kbd>![Dashboard](https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=1000)</kbd>
-
-### Gestión de Actividades
-*Interfaz técnica con diseño oscuro y controles de precisión.*
-
-### Editor de Pantallas
-*Autorización segura mediante Shields e indicadores de pulso online.*
+| Tecnología | Rol |
+| :--- | :--- |
+| **Next.js 16** | Marco de trabajo con Turbopack para máxima velocidad. |
+| **Node.js & Express** | Backend robusto y escalable. |
+| **Socket.io** | Sincronización en tiempo real (milisegundos). |
+| **MongoDB** | Persistencia de datos flexible y segura. |
+| **Framer Motion** | Micro-animaciones y transiciones premium. |
+| **Tailwind CSS** | Diseño técnico y moderno "pixel-perfect". |
 
 ---
 
-## 🚀 Instalación Rápida (Para Desarrolladores)
+## 🚀 Instalación y Despliegue
 
-1. **Clonar el repositorio**
+1. **Clonar proyecto**
    ```bash
    git clone https://github.com/flavioGonz/pixelflow.git
    cd pixelflow
@@ -63,34 +53,33 @@ Construido sobre WebSockets para una sincronización instantánea. Si cambias un
    npm install
    ```
 
-3. **Variables de Entorno**
-   Crea un archivo `.env` en la raíz:
+3. **Configuración de Entorno**
+   Crea tu `.env`:
    ```env
-   MONGODB_URI=tu_mongo_uri
-   JWT_SECRET=tu_secreto_super_seguro
+   MONGODB_URI=mongodb://localhost:27017/pixelflow
+   JWT_SECRET=tu_secreto_para_auth
    PORT=3000
    ```
 
-4. **Lanzar en desarrollo**
+4. **Modo Desarrollo**
    ```bash
    npm run dev
    ```
 
 ---
 
-## 💼 Perfil Comercial
+## 💼 Visión Comercial
 
-PixelFlow está listo para ser comercializado como un producto **SaaS (Software as a Service)** o **On-Premise**. 
-
-- **Escalable:** Soporta cientos de pantallas simultáneas.
-- **Personalizable:** Marca blanca disponible para distribuidores.
-- **PWA Ready:** Las pantallas pueden funcionar como aplicaciones nativas en Smart TVs y tablets.
+PixelFlow no es solo un software, es un producto listo para el mercado:
+- **White-label Friendly:** Personaliza la estética para tu propia marca.
+- **SaaS Nativo:** Estructura modular preparada para suscripciones.
+- **Compatible con Smart TVs:** Funciona como PWA en cualquier navegador moderno.
 
 ---
 
 ## 👤 Autor
 
-Desarrollado con ❤️ por **[Flavio Gonzalez](https://github.com/flavioGonz)**.
+Desarrollado por **[Flavio Gonzalez](https://github.com/flavioGonz)**.
 
 ---
 
