@@ -1,6 +1,7 @@
 # 🚀 PixelFlow - Plataforma de Señalización Digital (SaaS)
+<img width="1916" height="880" alt="image" src="https://github.com/user-attachments/assets/43243e26-d776-4417-815e-5f19d469e0ec" />
 
-<img width="1897" height="940" alt="image" src="https://github.com/user-attachments/assets/c62363a7-0b65-44c0-9423-ae27a83be0d1" />
+
 
 
 **PixelFlow** es una solución de señalización digital (Digital Signage) de alto impacto, diseñada para transformar cualquier pantalla en un canal dinámico y profesional de comunicación. Ideal para hostelería, gimnasios, oficinas y retail.
@@ -11,7 +12,8 @@
 
 ### 🎨 PixelFlow Studio (Editor Maestro)
 Diseña la cuadrícula de tu contenido con precisión absoluta. Gestiona widgets dinámicos y publica cambios al instante sin recargas.
-![Editor](docs/images/editor.png)
+<img width="1897" height="940" alt="image" src="https://github.com/user-attachments/assets/c62363a7-0b65-44c0-9423-ae27a83be0d1" />
+
 
 ### 🕒 Gestión de Cronogramas
 Automatiza tu comunicación. Programa rutinas horarias, eventos especiales y cronogramas de actividades de forma intuitiva.
