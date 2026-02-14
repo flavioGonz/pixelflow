@@ -2,7 +2,9 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, User, Bell } from 'lucide-react';
+import ArrowLeft from 'lucide-react/dist/esm/icons/arrow-left';
+import User from 'lucide-react/dist/esm/icons/user';
+import Bell from 'lucide-react/dist/esm/icons/bell';
 import Link from 'next/link';
 import { UserMenu } from './UserMenu';
 import { NotificationCenter } from './NotificationCenter';

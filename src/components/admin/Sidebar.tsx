@@ -4,10 +4,15 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-    ShoppingBag, RefreshCw, Database, Smartphone, Network,
-    Calendar, Settings2, Layout as LayoutIcon, LogOut
-} from 'lucide-react';
+import ShoppingBag from 'lucide-react/dist/esm/icons/shopping-bag';
+import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw';
+import Database from 'lucide-react/dist/esm/icons/database';
+import Smartphone from 'lucide-react/dist/esm/icons/smartphone';
+import Network from 'lucide-react/dist/esm/icons/network';
+import Calendar from 'lucide-react/dist/esm/icons/calendar';
+import Settings2 from 'lucide-react/dist/esm/icons/settings-2';
+import LayoutIcon from 'lucide-react/dist/esm/icons/layout';
+import LogOut from 'lucide-react/dist/esm/icons/log-out';
 import { motion } from 'framer-motion';
 
 export const AdminSidebar = () => {
