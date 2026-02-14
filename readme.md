@@ -25,6 +25,9 @@ Automatiza tu comunicación. Programa rutinas horarias, eventos especiales y cro
 ### 🖥️ Monitoreo de Pantallas en Tiempo Real
 Controla y autoriza terminales de forma remota. Estado de conexión vivo, métricas de actividad y gestión de accesos con un solo clic.
 
+<img width="1909" height="723" alt="image" src="https://github.com/user-attachments/assets/198a611c-d0c3-447c-aaa0-5be3a3391565" />
+
+
 ### 🍱 Catálogos Dinámicos
 Módulos dedicados para Menú de Productos y Agendas de Actividades, optimizados para lectura en pantallas de gran formato.
 
