@@ -15,6 +15,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const User = require('./src/models/User');
+const Product = require('./src/models/Product');
+const Category = require('./src/models/Category');
+const Activity = require('./src/models/Activity');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -54,10 +59,122 @@ nextApp.prepare().then(() => {
     });
 
     expressApp.use(express.json());
+    expressApp.use(express.json());
     expressApp.use(cookieParser());
 
-    // --- AUTHENTICATION ROUTES ---
+    // --- SWAGGER DOCUMENTATION ---
+    const swaggerOptions = {
+        definition: {
+            openapi: '3.0.0',
+            info: {
+                title: 'PixelFlow API',
+                version: '1.0.0',
+                description: 'API documentation for PixelFlow Admin Panel',
+            },
+            servers: [
+                { url: `http://localhost:${process.env.PORT || 3000}` },
+            ],
+        },
+        apis: ['./server.js'], // Files containing annotations
+    };
+    const swaggerDocs = swaggerJsdoc(swaggerOptions);
+    expressApp.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
+    // --- SEED DATA ENDPOINT ---
+    /**
+     * @swagger
+     * /api/seed:
+     *   post:
+     *     summary: Seed the database with default data
+     *     responses:
+     *       200:
+     *         description: Database seeded successfully
+     */
+    expressApp.post('/api/seed', async (req, res) => {
+        try {
+            const productsCount = await Product.countDocuments();
+            const activitiesCount = await Activity.countDocuments();
+            const categoriesCount = await Category.countDocuments();
+
+            if (productsCount > 0 && activitiesCount > 0) {
+                return res.json({ message: 'Database already has data.' });
+            }
+
+            // Seed Categories
+            const cat1 = await Category.create({ name: 'BEBIDAS', order: 1 });
+            const cat2 = await Category.create({ name: 'SNACKS', order: 2 });
+            const cat3 = await Category.create({ name: 'POSTRES', order: 3 });
+
+            // Seed Products
+            await Product.create({
+                name: 'COCA COLA',
+                description: 'Refresco de cola carbonatada.',
+                price: 2.50,
+                currency: '$',
+                categoryIds: [cat1._id],
+                available: true
+            });
+            await Product.create({
+                name: 'PAPAS FRITAS',
+                description: 'Papas fritas crujientes con sal.',
+                price: 3.00,
+                currency: '$',
+                categoryIds: [cat2._id],
+                available: true
+            });
+            await Product.create({
+                name: 'HELADO',
+                description: 'Helado de vainilla con chocolate.',
+                price: 4.50,
+                currency: '$',
+                categoryIds: [cat3._id],
+                available: true
+            });
+
+            // Seed Activities
+            await Activity.create({
+                title: 'YOGA MAÑANERO',
+                desc: 'Clase de yoga para empezar el día con energía.',
+                time: '08:00',
+                category: 'BIENESTAR',
+                order: 1
+            });
+            await Activity.create({
+                title: 'CINE AL AIRE LIBRE',
+                desc: 'Proyección de películas clásicas bajo las estrellas.',
+                time: '20:00',
+                category: 'ENTRETENIMIENTO',
+                order: 2
+            });
+
+            res.json({ message: 'Database seeded successfully with default data.' });
+        } catch (error) {
+            console.error('Seed error:', error);
+            res.status(500).json({ error: 'Failed to seed database' });
+        }
+    });
+
+    // --- AUTHENTICATION ROUTES ---
+    /**
+     * @swagger
+     * /api/auth/login:
+     *   post:
+     *     summary: User login
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               email:
+     *                 type: string
+     *               password:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: Login successful
+     */
     expressApp.post('/api/auth/login', async (req, res) => {
         try {
             const { email, password } = req.body;
@@ -88,11 +205,29 @@ nextApp.prepare().then(() => {
         }
     });
 
+    /**
+     * @swagger
+     * /api/auth/logout:
+     *   post:
+     *     summary: User logout
+     *     responses:
+     *       200:
+     *         description: Logout successful
+     */
     expressApp.post('/api/auth/logout', (req, res) => {
         res.clearCookie('token');
         res.json({ message: 'Logged out' });
     });
 
+    /**
+     * @swagger
+     * /api/auth/me:
+     *   get:
+     *     summary: Get current user info
+     *     responses:
+     *       200:
+     *         description: User info retrieved
+     */
     expressApp.get('/api/auth/me', async (req, res) => {
         try {
             const token = req.cookies.token;
@@ -113,6 +248,15 @@ nextApp.prepare().then(() => {
         }
     });
 
+    /**
+     * @swagger
+     * /api/auth/change-password:
+     *   post:
+     *     summary: Change user password
+     *     responses:
+     *       200:
+     *         description: Password changed successfully
+     */
     expressApp.post('/api/auth/change-password', async (req, res) => {
         try {
             const token = req.cookies.token;
@@ -152,10 +296,249 @@ nextApp.prepare().then(() => {
         }
     });
 
+    // --- PRODUCTS & CATEGORIES ROUTES ---
+    /**
+     * @swagger
+     * /api/products:
+     *   get:
+     *     summary: Get all products
+     *     responses:
+     *       200:
+     *         description: List of products
+     */
+    expressApp.get('/api/products', async (req, res) => {
+        try {
+            const products = await Product.find().sort({ createdAt: -1 });
+            res.json(products);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/products:
+     *   post:
+     *     summary: Create a product
+     *     responses:
+     *       200:
+     *         description: Product created
+     */
+    expressApp.post('/api/products', async (req, res) => {
+        try {
+            const product = await Product.create(req.body);
+            res.json(product);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/products/{id}:
+     *   put:
+     *     summary: Update a product
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Product updated
+     */
+    expressApp.put('/api/products/:id', async (req, res) => {
+        try {
+            const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+            res.json(product);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/products/{id}:
+     *   delete:
+     *     summary: Delete a product
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Product deleted
+     */
+    expressApp.delete('/api/products/:id', async (req, res) => {
+        try {
+            await Product.findByIdAndDelete(req.params.id);
+            res.json({ message: 'Deleted' });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/categories:
+     *   get:
+     *     summary: Get all categories
+     *     responses:
+     *       200:
+     *         description: List of categories
+     */
+    expressApp.get('/api/categories', async (req, res) => {
+        try {
+            const categories = await Category.find().sort({ order: 1 });
+            res.json(categories);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/categories:
+     *   post:
+     *     summary: Create a category
+     *     responses:
+     *       200:
+     *         description: Category created
+     */
+    expressApp.post('/api/categories', async (req, res) => {
+        try {
+            const category = await Category.create(req.body);
+            res.json(category);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/categories/{id}:
+     *   put:
+     *     summary: Update a category
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Category updated
+     */
+    expressApp.put('/api/categories/:id', async (req, res) => {
+        try {
+            const category = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true });
+            res.json(category);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/categories/{id}:
+     *   delete:
+     *     summary: Delete a category
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Category deleted
+     */
+    expressApp.delete('/api/categories/:id', async (req, res) => {
+        try {
+            await Category.findByIdAndDelete(req.params.id);
+            res.json({ message: 'Deleted' });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // --- ACTIVITIES ROUTES ---
+    /**
+     * @swagger
+     * /api/activities:
+     *   get:
+     *     summary: Get all activities
+     *     responses:
+     *       200:
+     *         description: List of activities
+     */
+    expressApp.get('/api/activities', async (req, res) => {
+        try {
+            const activities = await Activity.find().sort({ order: 1 });
+            res.json(activities);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/activities:
+     *   post:
+     *     summary: Create an activity
+     *     responses:
+     *       200:
+     *         description: Activity created
+     */
+    expressApp.post('/api/activities', async (req, res) => {
+        try {
+            const activity = await Activity.create(req.body);
+            res.json(activity);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/activities/{id}:
+     *   put:
+     *     summary: Update an activity
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Activity updated
+     */
+    expressApp.put('/api/activities/:id', async (req, res) => {
+        try {
+            const activity = await Activity.findByIdAndUpdate(req.params.id, req.body, { new: true });
+            res.json(activity);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    /**
+     * @swagger
+     * /api/activities/{id}:
+     *   delete:
+     *     summary: Delete an activity
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Activity deleted
+     */
+    expressApp.delete('/api/activities/:id', async (req, res) => {
+        try {
+            await Activity.findByIdAndDelete(req.params.id);
+            res.json({ message: 'Deleted' });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
     // Serve static files from /uploads
     expressApp.use('/uploads', express.static(uploadDir));
 
     // API Upload
+    /**
+     * @swagger
+     * /api/upload:
+     *   post:
+     *     summary: Upload an image or file
+     *     responses:
+     *       200:
+     *         description: File uploaded
+     */
     expressApp.post('/api/upload', upload.single('image'), (req, res) => {
         console.log('Upload request received');
         if (!req.file) {
@@ -394,13 +777,26 @@ nextApp.prepare().then(() => {
             const screens = await Screen.find({ scheduleId: { $exists: true, $ne: null } }).populate('scheduleId');
 
             for (const screen of screens) {
-                if (!screen.scheduleId) continue;
+                if (!screen.scheduleId || !screen.scheduleId.events) continue;
 
                 // Find if there's an event right now
                 const activeEvent = screen.scheduleId.events.find(event => {
-                    return event.dayOfWeek === currentDay &&
-                        currentTime >= event.startTime &&
-                        currentTime < event.endTime;
+                    // Check time range first
+                    if (currentTime < event.startTime || currentTime >= event.endTime) return false;
+
+                    // Check date/day based on schedule type
+                    const type = screen.scheduleId.type || 'week'; // Default to week
+
+                    if (type === 'day') {
+                        return true; // Applies every day
+                    } else if (type === 'month') {
+                        // For month, dayOfWeek stores the day index (0 = 1st, 1 = 2nd, etc.)
+                        const currentMonthDay = now.getDate(); // 1-31
+                        return event.dayOfWeek === (currentMonthDay - 1);
+                    } else {
+                        // Default 'week'
+                        return event.dayOfWeek === currentDay; // 0-6 (Sun-Sat)
+                    }
                 });
 
                 if (activeEvent) {
@@ -408,10 +804,10 @@ nextApp.prepare().then(() => {
                     if (screen.lastLayoutId?.toString() !== activeEvent.layoutId.toString()) {
                         const layout = await Layout.findById(activeEvent.layoutId);
                         if (layout) {
-                            console.log(`[Scheduler] Updating screen ${screen.screenId} to layout ${layout.name} based on schedule.`);
+                            console.log(`[Scheduler] Updating screen ${screen.screenId} to layout ${layout.name} based on ${screen.scheduleId.type} schedule.`);
                             io.to(`screen_${screen.screenId}`).emit('update_layout', layout);
-                            screen.lastLayoutId = activeEvent.layoutId;
-                            await screen.save();
+                            // Update screen in DB
+                            await Screen.findOneAndUpdate({ screenId: screen.screenId }, { lastLayoutId: activeEvent.layoutId });
                         }
                     }
                 }

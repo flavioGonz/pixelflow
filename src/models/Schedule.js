@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const ScheduleSchema = new mongoose.Schema({
+    type: { type: String, enum: ['day', 'week', 'month'], default: 'week' },
     name: { type: String, required: true },
     events: [{
         dayOfWeek: { type: Number, required: true }, // 0-6 (Sun-Sat)

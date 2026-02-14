@@ -35,15 +35,37 @@ export default function RootLayout({
                 <script
                     dangerouslySetInnerHTML={{
                         __html: `
+
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
-                    console.log('SW Registered', reg);
+                  navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                    console.log('SW Registered with scope:', registration.scope);
+                    
+                    // Check for updates every 1 minute
+                    setInterval(() => {
+                      registration.update();
+                    }, 60000);
+
+                    // If a waiting worker exists, force it to update
+                    if (registration.waiting) {
+                        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    }
+
                   }).catch(function(err) {
                     console.log('SW Registration Failed', err);
                   });
+
+                  // Force reload when new SW takes control
+                  let refreshing = false;
+                  navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                      window.location.reload();
+                      refreshing = true;
+                    }
+                  });
                 });
               }
+            
             `,
                     }}
                 />

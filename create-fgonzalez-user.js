@@ -10,7 +10,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pixelflow
 
 const createSpecificUser = async () => {
     try {
-        const email = 'fgonzalez'; // Username requested by user, treating as email/username field
+        const email = 'fgonzalez@pixelflow.com'; // Username requested by user, treating as email/username field
         const password = 'flavio20';
 
         // Check if user exists

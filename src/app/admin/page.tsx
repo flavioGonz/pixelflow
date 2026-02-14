@@ -6,7 +6,7 @@ import { LayoutJSON, WidgetType, WidgetConfig } from '@/store/usePlayerStore';
 import {
     Plus, Trash2, Smartphone, Monitor, ShoppingBag, Utensils,
     Layout as LayoutIcon, Settings2, Maximize, Save, Layers,
-    Database, RefreshCw, Eye, MousePointer2, Box, Palette,
+    Database, RefreshCw, Eye, MousePointer2, Palette,
     ChevronRight, ChevronLeft, Zap, Globe, Image as ImageIcon, Sparkles, ArrowLeft, Copy, Network, Clock, Search,
     Megaphone, Instagram, PlaneTakeoff, Music, PanelLeftClose, PanelRightClose, PanelLeftOpen, PanelRightOpen,
     ChevronDown, Link as LinkIcon, Calendar, LogOut, Lock
@@ -14,11 +14,10 @@ import {
 import { Canvas } from '@/components/builder/Canvas';
 import { RichTextEditor } from '@/components/builder/RichTextEditor';
 import { ImageUpload } from '@/components/builder/ImageUpload';
-import { FlowMap } from '@/components/admin/FlowMap';
-import { ScheduleCanvas } from '@/components/admin/ScheduleCanvas';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+
 
 let socket: Socket;
 
@@ -38,33 +37,32 @@ export default function AdminDashboard() {
     const [backgroundPattern, setBackgroundPattern] = useState<'none' | 'dots' | 'grid' | 'waves' | 'noise'>('none');
     const [backgroundPatternOpacity, setBackgroundPatternOpacity] = useState(0.2);
     const [editingLayoutId, setEditingLayoutId] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'screens' | 'layouts' | 'components' | 'products' | 'activities' | 'flow' | 'settings'>('components');
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [layoutToDelete, setLayoutToDelete] = useState<any>(null);
     const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const layoutIdParam = searchParams.get('id');
 
     // DB States
     const [savedLayouts, setSavedLayouts] = useState<any[]>([]);
     const [screens, setScreens] = useState<any[]>([]);
     const [allProducts, setAllProducts] = useState<any[]>([]);
     const [allActivities, setAllActivities] = useState<any[]>([]);
-    const [allSchedules, setAllSchedules] = useState<any[]>([]);
     const [allCategories, setAllCategories] = useState<any[]>([
         { id: 'cat-1', name: 'GASTRONOMÍA', photo: '', description: 'Platos de autor y especialidades.' },
         { id: 'cat-2', name: 'BAR & COCKTAILS', photo: '', description: 'Tragos clásicos e internacionales.' },
         { id: 'cat-3', name: 'KIDS CLUB', photo: '', description: 'Actividades para los más pequeños.' },
         { id: 'cat-4', name: 'BIENESTAR & SPA', photo: '', description: 'Relax y cuidado personal.' }
     ]);
-    const [catalogView, setCatalogView] = useState<'categories' | 'products'>('categories');
-    const [adminProductSearch, setAdminProductSearch] = useState('');
+
 
     const fetchLayouts = useCallback(() => {
         if (socket) {
             socket.emit('get_layouts');
             socket.emit('get_screens');
-            socket.emit('get_schedules');
         }
     }, []);
 
@@ -77,14 +75,23 @@ export default function AdminDashboard() {
         socket.on('disconnect', () => setIsConnected(false));
         socket.on('layouts_list', (layouts) => {
             setSavedLayouts(layouts);
-            // Load "Mi Primer Layout" if it exists and we don't have widgets yet
-            if (widgets.length === 0) {
+
+            // Check if we have an ID in URL to load
+            if (layoutIdParam) {
+                const targetLayout = layouts.find((l: any) => l._id === layoutIdParam);
+                if (targetLayout) {
+                    loadLayout(targetLayout);
+                    return;
+                }
+            }
+
+            // Load "Mi Primer Layout" if it exists and we don't have widgets yet and no params
+            if (widgets.length === 0 && !layoutIdParam) {
                 const initial = layouts.find((l: any) => l.name === 'Mi Primer Layout');
                 if (initial) loadLayout(initial);
             }
         });
         socket.on('screens_list', (screenList) => setScreens(screenList));
-        socket.on('schedules_list', (schedules) => setAllSchedules(schedules));
 
         // Initialize with default data
         const defaultProducts = (getDefaultData('PRODUCT_LIST') as any).items;
@@ -235,10 +242,6 @@ export default function AdminDashboard() {
                 subtitle: 'CENA DE GALA & SHOW',
                 accentColor: '#3b82f6'
             };
-            case 'ATMOSPHERE': return {
-                type: 'GOLD',
-                intensity: 20
-            };
             case 'FLIGHT_BOARD': return {
                 type: 'DEPARTURES',
                 flights: []
@@ -289,9 +292,9 @@ export default function AdminDashboard() {
     };
 
     const saveLayout = (isNew: boolean = false) => {
-        const id = (isNew || !editingLayoutId) ? 'layout-' + Date.now() : editingLayoutId;
-        const layout: LayoutJSON = {
-            id,
+        if (!confirm(`¿Guardar layout con orientación ${orientation.toUpperCase()}?`)) return;
+        const isExisting = !isNew && editingLayoutId;
+        const layout: any = {
             name: layoutName,
             orientation,
             widgets,
@@ -304,12 +307,14 @@ export default function AdminDashboard() {
             backgroundPattern,
             backgroundPatternOpacity,
         };
+        // Include _id for existing layouts so the backend uses findByIdAndUpdate
+        if (isExisting) {
+            layout._id = editingLayoutId;
+        }
         socket.emit('save_layout', { screenId, layout });
-        setEditingLayoutId(id);
         // Force refresh layouts list after a small delay to ensure DB persistence
         setTimeout(() => {
             fetchLayouts();
-            // Optional: Provide visual feedback here if we had a toast system
         }, 500);
     };
 
@@ -335,7 +340,6 @@ export default function AdminDashboard() {
         setBackgroundPattern('none');
         setBackgroundPatternOpacity(0.2);
         setSelectedWidgetId(null);
-        setActiveTab('components');
         setShowResetConfirm(false);
     };
 
@@ -503,63 +507,7 @@ export default function AdminDashboard() {
             </header>
 
             <div className="flex flex-1 overflow-hidden">
-                {/* Modern Navigation Sidebar (Fixed) */}
-                <aside className="w-16 bg-black/20 border-r border-white/5 flex flex-col items-center py-8 gap-8 z-50 sticky top-20 h-[calc(100vh-80px)] custom-scrollbar">
-                    <button
-                        onClick={() => setActiveTab('components')}
-                        className={`p-3 rounded-md transition-all ${activeTab === 'components' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
-                    >
-                        <Box className="w-6 h-6" />
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('products')}
-                        className={`p-3 rounded-md transition-all ${activeTab === 'products' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
-                    >
-                        <ShoppingBag className="w-6 h-6" />
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('activities')}
-                        className={`p-3 rounded-md transition-all ${activeTab === 'activities' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
-                    >
-                        <RefreshCw className="w-6 h-6" />
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('layouts')}
-                        className={`p-3 rounded-md transition-all ${activeTab === 'layouts' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
-                    >
-                        <Database className="w-6 h-6" />
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('screens')}
-                        className={`p-3 rounded-md transition-all ${activeTab === 'screens' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
-                    >
-                        <Smartphone className="w-6 h-6" />
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('flow')}
-                        className={`p-3 rounded-md transition-all ${activeTab === 'flow' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
-                    >
-                        <Network className="w-6 h-6" />
-                    </button>
-                    <Link href="/admin/schedules">
-                        <button
-                            className="p-3 rounded-md transition-all text-neutral-500 hover:text-emerald-500 hover:bg-white/5"
-                            title="Programación de Contenidos (Ir a Página)"
-                        >
-                            <Calendar className="w-6 h-6" />
-                        </button>
-                    </Link>
-                    <div className="mt-auto">
-                        <button
-                            onClick={() => setActiveTab('settings')}
-                            className={`p-3 rounded-md transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-600 hover:text-white hover:bg-white/5'}`}
-                        >
-                            <Settings2 className="w-6 h-6" />
-                        </button>
-                    </div>
-                </aside>
-
-                {/* Content Panel for Sidebar Tabs (Wider) */}
+                {/* Widgets Sidebar */}
                 <motion.aside
                     initial={false}
                     animate={{
@@ -577,631 +525,63 @@ export default function AdminDashboard() {
                         {leftSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
                     </button>
 
-                    <div className="flex-1 overflow-y-auto px-6 pt-4 pb-10 space-y-10 custom-scrollbar min-w-[300px]">
-                        <AnimatePresence mode="wait">
-                            {activeTab === 'components' && (
-                                <motion.div
-                                    key="components"
-                                    initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
-                                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                                    exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
-                                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                                    className="space-y-6"
-                                >
-                                    <div className="sticky top-0 z-20 bg-[#080808] pb-6">
-                                        <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em] flex items-center gap-2">
-                                            <Sparkles className="w-3 h-3" /> Biblioteca de Componentes
-                                        </h2>
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-4 pb-20">
-                                        {([
-                                            { type: 'TEXT', label: 'Texto Dinámico', desc: 'Títulos y párrafos.', color: 'from-blue-500 to-indigo-600', icon: 'T' },
-                                            { type: 'VIDEO', label: 'Video', desc: 'Fondos animados.', color: 'from-red-500 to-orange-600', icon: 'V' },
-                                            { type: 'SLIDER', label: 'Galería', desc: 'Carrusel fotos/videos.', color: 'from-emerald-500 to-teal-600', icon: 'S' },
-                                            { type: 'PRODUCT_LIST', label: 'Carta', desc: 'Menú productos.', color: 'from-amber-500 to-yellow-600', icon: 'P' },
-                                            { type: 'ACTIVITIES', label: 'Agenda', desc: 'Eventos del día.', color: 'from-purple-500 to-pink-600', icon: 'A' },
-                                            { type: 'DATE_TIME', label: 'Fecha/Hora', desc: 'Reloj digital.', color: 'from-emerald-400 to-cyan-500', icon: <Clock className="w-5 h-5" /> },
-                                            { type: 'QR_CODE', label: 'QR', desc: 'Enlace escaneable.', color: 'from-neutral-500 to-neutral-700', icon: 'Q' },
-                                            { type: 'CATEGORY_NAV', label: 'Menú Táctil', desc: 'Navegación principal.', color: 'from-blue-400 to-cyan-500', icon: 'M' },
-                                            { type: 'WEATHER', label: 'Clima Vivo', desc: 'Pronóstico en tiempo real.', color: 'from-sky-400 to-blue-600', icon: 'W' },
-                                            { type: 'NAV_BUTTON', label: 'Botón', desc: 'Volver/Link.', color: 'from-pink-500 to-rose-600', icon: 'N' },
-                                            { type: 'TICKER', label: 'Ticker', desc: 'Cinta de noticias.', color: 'from-blue-600 to-blue-800', icon: <Megaphone className="w-5 h-5" /> },
-                                            { type: 'SOCIAL_FEED', label: 'Social Feed', desc: 'Reseñas e Instagram.', color: 'from-pink-600 to-purple-700', icon: <Instagram className="w-5 h-5" /> },
-                                            { type: 'COUNTDOWN', label: 'Countdown', desc: 'Reloj regresivo.', color: 'from-orange-500 to-red-600', icon: <Clock className="w-5 h-5" /> },
-                                            { type: 'ATMOSPHERE', label: 'Atmósfera', desc: 'Efectos partículas.', color: 'from-amber-400 to-yellow-600', icon: <Sparkles className="w-5 h-5" /> },
-                                            { type: 'FLIGHT_BOARD', label: 'Vuelos', desc: 'Salidas/Llegadas.', color: 'from-indigo-600 to-blue-900', icon: <PlaneTakeoff className="w-5 h-5" /> },
-                                            { type: 'MUSIC_PLAYER', label: 'Música', desc: 'Player visualizer.', color: 'from-emerald-500 to-green-700', icon: <Music className="w-5 h-5" /> },
-                                        ]).map((item: any) => (
-                                            <button
-                                                key={item.type}
-                                                onClick={() => addWidget(item.type)}
-                                                className="group relative flex items-center gap-3 bg-[#111] hover:bg-white/[0.03] border border-white/5 hover:border-blue-500/30 p-2.5 rounded-lg transition-all overflow-hidden"
-                                            >
-                                                <div className={`w-10 h-10 rounded-md bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500 shrink-0`}>
-                                                    <span className="text-lg font-black text-white">{item.icon}</span>
-                                                </div>
-                                                <div className="flex flex-col items-start">
-                                                    <span className="text-[12px] font-black uppercase tracking-tight text-white italic">
-                                                        {item.label}
-                                                    </span>
-                                                    <span className="text-[9px] text-neutral-600 font-bold uppercase tracking-widest mt-0.5 leading-none">
-                                                        {item.desc}
-                                                    </span>
-                                                </div>
-                                                {/* Preview Placeholder Decoration */}
-                                                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                    <div className="w-16 h-16 bg-white/5 rounded-full blur-2xl" />
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {activeTab === 'layouts' && (
-                                <motion.div
-                                    key="layouts"
-                                    initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
-                                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                                    exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
-                                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                                    className="space-y-6"
-                                >
-                                    <div className="sticky top-0 z-20 bg-[#080808] pb-6 flex flex-col gap-4">
-                                        <div className="flex justify-between items-center">
-                                            <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] flex items-center gap-2">
-                                                <Database className="w-3 h-3" /> Diseños Guardados
-                                            </h2>
-                                            <button onClick={fetchLayouts} className="p-2 hover:bg-white/5 rounded-md transition-colors">
-                                                <RefreshCw className="w-3 h-3 text-neutral-500" />
-                                            </button>
+                    <div className="flex-1 overflow-y-auto px-6 pt-8 pb-10 space-y-10 custom-scrollbar min-w-[300px]">
+                        <div className="space-y-6">
+                            <div className="sticky top-0 z-20 bg-[#080808] pb-6">
+                                <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em] flex items-center gap-2">
+                                    <Sparkles className="w-3 h-3" /> Biblioteca de Componentes
+                                </h2>
+                            </div>
+                            <div className="grid grid-cols-1 gap-4 pb-20">
+                                {[
+                                    { type: 'TEXT', label: 'Texto Dinámico', desc: 'Títulos y párrafos.', color: 'from-blue-500 to-indigo-600', icon: 'T' },
+                                    { type: 'VIDEO', label: 'Video', desc: 'Fondos animados.', color: 'from-red-500 to-orange-600', icon: 'V' },
+                                    { type: 'SLIDER', label: 'Galería', desc: 'Carrusel fotos/videos.', color: 'from-emerald-500 to-teal-600', icon: 'S' },
+                                    { type: 'PRODUCT_LIST', label: 'Carta', desc: 'Menú productos.', color: 'from-amber-500 to-yellow-600', icon: 'P' },
+                                    { type: 'ACTIVITIES', label: 'Agenda', desc: 'Eventos del día.', color: 'from-purple-500 to-pink-600', icon: 'A' },
+                                    { type: 'DATE_TIME', label: 'Fecha/Hora', desc: 'Reloj digital.', color: 'from-emerald-400 to-cyan-500', icon: <Clock className="w-4 h-4" /> },
+                                    { type: 'QR_CODE', label: 'QR', desc: 'Enlace escaneable.', color: 'from-neutral-500 to-neutral-700', icon: 'Q' },
+                                    { type: 'CATEGORY_NAV', label: 'Menú Táctil', desc: 'Navegación principal.', color: 'from-blue-400 to-cyan-500', icon: 'M' },
+                                    { type: 'WEATHER', label: 'Clima Vivo', desc: 'Pronóstico en tiempo real.', color: 'from-sky-400 to-blue-600', icon: 'W' },
+                                    { type: 'NAV_BUTTON', label: 'Botón', desc: 'Volver/Link.', color: 'from-pink-500 to-rose-600', icon: 'N' },
+                                    { type: 'TICKER', label: 'Ticker', desc: 'Cinta de noticias.', color: 'from-blue-600 to-blue-800', icon: <Megaphone className="w-4 h-4" /> },
+                                    { type: 'SOCIAL_FEED', label: 'Social Feed', desc: 'Reseñas e Instagram.', color: 'from-pink-600 to-purple-700', icon: <Instagram className="w-4 h-4" /> },
+                                    { type: 'COUNTDOWN', label: 'Countdown', desc: 'Reloj regresivo.', color: 'from-orange-500 to-red-600', icon: <Clock className="w-4 h-4" /> },
+                                    { type: 'FLIGHT_BOARD', label: 'Vuelos', desc: 'Salidas/Llegadas.', color: 'from-indigo-600 to-blue-900', icon: <PlaneTakeoff className="w-4 h-4" /> },
+                                    { type: 'MUSIC_PLAYER', label: 'Música', desc: 'Player visualizer.', color: 'from-emerald-500 to-green-700', icon: <Music className="w-4 h-4" /> },
+                                ].map((item: any) => (
+                                    <button
+                                        key={item.type}
+                                        onClick={() => addWidget(item.type)}
+                                        className="group relative flex items-center gap-3 bg-[#111] hover:bg-white/[0.03] border border-white/5 hover:border-blue-500/30 p-2.5 rounded-lg transition-all overflow-hidden"
+                                    >
+                                        <div className={`w-10 h-10 rounded-md bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500 shrink-0`}>
+                                            <span className="text-lg font-black text-white italic">{typeof item.icon === 'string' ? item.icon : item.icon}</span>
                                         </div>
-                                        <button
-                                            onClick={createNewLayout}
-                                            className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 text-white text-[11px] font-black uppercase rounded-md border border-white/10 transition-all shadow-lg"
-                                        >
-                                            <Plus className="w-4 h-4" /> Nuevo Lienzo en Blanco
-                                        </button>
-                                    </div>
-                                    <div className="space-y-3 pb-20">
-                                        {savedLayouts.length === 0 ? (
-                                            <div className="bg-[#111] p-6 rounded-md border border-white/5 text-center">
-                                                <p className="text-[10px] text-neutral-600 italic">No hay diseños guardados.</p>
-                                            </div>
-                                        ) : (
-                                            savedLayouts.map((l) => (
-                                                <div key={l._id} className="group relative">
-                                                    <button
-                                                        onClick={() => loadLayout(l)}
-                                                        className="w-full text-left p-4 rounded-md bg-[#111] hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/30 transition-all group-hover:pr-12"
-                                                    >
-                                                        <div className="text-[12px] font-black italic text-neutral-200 group-hover:text-blue-400 truncate">{l.name}</div>
-                                                        <div className="flex items-center gap-3 mt-2">
-                                                            <div className="text-[9px] text-neutral-600 font-bold uppercase tracking-widest">{l.orientation}</div>
-                                                            <div className="w-1 h-1 rounded-full bg-neutral-800" />
-                                                            <div className="text-[9px] text-blue-500/60 font-black uppercase">{l.widgets.length} elementos</div>
-                                                        </div>
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (confirm('¿Crear copia de este diseño?')) {
-                                                                const newLayout = { ...l };
-                                                                delete (newLayout as any)._id;
-                                                                delete (newLayout as any).__v;
-                                                                newLayout.name = `${l.name} (Copia)`;
-                                                                socket.emit('save_layout', { screenId: null, layout: newLayout });
-                                                                setTimeout(fetchLayouts, 800);
-                                                            }
-                                                        }}
-                                                        className="absolute right-12 top-1/2 -translate-y-1/2 p-2.5 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white rounded-md opacity-0 group-hover:opacity-100 transition-all"
-                                                        title="Duplicar como plantilla"
-                                                    >
-                                                        <Copy className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setLayoutToDelete(l);
-                                                        }}
-                                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-md opacity-0 group-hover:opacity-100 transition-all"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {activeTab === 'products' && (
-                                <motion.div
-                                    key="products"
-                                    initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
-                                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                                    exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
-                                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                                    className="space-y-6"
-                                >
-                                    <div className="sticky top-0 z-20 bg-[#080808] pt-2 pb-6 space-y-6">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex bg-black/60 backdrop-blur-md rounded-full p-1.5 border border-white/5 shadow-2xl">
-                                                {(['categories', 'products'] as const).map((view) => (
-                                                    <button
-                                                        key={view}
-                                                        onClick={() => setCatalogView(view)}
-                                                        className={`px-5 py-2 rounded-full text-[10px] font-black uppercase transition-all duration-300 ${catalogView === view ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
-                                                    >
-                                                        {view === 'categories' ? 'Categorías' : 'Productos'}
-                                                    </button>
-                                                ))}
-                                            </div>
-
-                                            <button
-                                                onClick={catalogView === 'products'
-                                                    ? () => setAllProducts([...allProducts, { id: 'p-' + Date.now(), name: 'PRODUCTO PREMIUM', price: 0, currency: '$', description: '', photo: '', categoryIds: [] }])
-                                                    : () => setAllCategories([...allCategories, { id: 'cat-' + Date.now(), name: 'NUEVA CATEGORÍA', photo: '', description: '' }])
-                                                }
-                                                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shadow-lg active:scale-90 ${catalogView === 'products' ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white' : 'bg-blue-500/20 text-blue-500 border border-blue-500/20 hover:bg-blue-500 hover:text-white'}`}
-                                            >
-                                                <Plus className="w-5 h-5" />
-                                            </button>
+                                        <div className="flex flex-col items-start">
+                                            <span className="text-[12px] font-black uppercase tracking-tight text-white italic">
+                                                {item.label}
+                                            </span>
+                                            <span className="text-[9px] text-neutral-600 font-bold uppercase tracking-widest mt-0.5 leading-none">
+                                                {item.desc}
+                                            </span>
                                         </div>
-
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-6 h-px bg-emerald-500/50" />
-                                            <h2 className="text-[11px] font-black text-emerald-500 uppercase tracking-[0.4em] flex items-center gap-2 italic">
-                                                <ShoppingBag className="w-4 h-4" /> Catálogo
-                                            </h2>
-                                        </div>
-                                    </div>
-                                    {catalogView === 'products' && (
-                                        <div className="relative group/adminsearch">
-                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-focus-within/adminsearch:text-emerald-500 transition-colors" />
-                                            <input
-                                                type="text"
-                                                placeholder="BUSCAR PRODUCTOS POR NOMBRE O DESCRIPCIÓN..."
-                                                className="w-full bg-[#111] border border-white/5 rounded-xl py-3.5 pl-12 pr-6 text-[11px] font-black uppercase tracking-widest outline-none focus:border-emerald-500/30 transition-all placeholder:text-neutral-700 italic"
-                                                value={adminProductSearch}
-                                                onChange={(e) => setAdminProductSearch(e.target.value)}
-                                            />
-                                        </div>
-                                    )}
-
-                                    <div className="space-y-4 pb-20 overflow-x-hidden">
-                                        {catalogView === 'categories' ? (
-                                            <div className="flex flex-col gap-1.5">
-                                                {allCategories.map((cat, idx) => (
-                                                    <div key={cat.id} className="bg-[#111]/80 px-3 py-1.5 rounded-lg border border-white/5 flex items-center gap-3 group hover:border-blue-500/40 transition-all">
-                                                        <span className="text-[9px] font-black text-blue-500/40 w-4">{idx + 1}</span>
-                                                        <input
-                                                            className="flex-1 bg-transparent border-none text-[11px] font-black text-white p-0 focus:ring-0 italic uppercase tracking-tight"
-                                                            value={cat.name}
-                                                            onChange={(e) => {
-                                                                const newCats = [...allCategories];
-                                                                newCats[idx].name = e.target.value.toUpperCase();
-                                                                setAllCategories(newCats);
-                                                            }}
-                                                        />
-                                                        <button
-                                                            onClick={() => setAllCategories(allCategories.filter((_, i) => i !== idx))}
-                                                            className="text-red-500/10 hover:text-red-500 transition-all p-1.5"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                {allCategories.length === 0 && (
-                                                    <div className="p-10 border border-dashed border-white/5 rounded-xl text-center">
-                                                        <p className="text-[10px] text-neutral-600 uppercase font-black tracking-widest italic">No hay categorías definidas</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            allProducts
-                                                .filter(p =>
-                                                    p.name.toLowerCase().includes(adminProductSearch.toLowerCase()) ||
-                                                    p.description?.toLowerCase().includes(adminProductSearch.toLowerCase())
-                                                )
-                                                .map((p, idx) => (
-                                                    <div key={p.id} className="bg-[#111]/50 p-4 rounded-xl border border-white/5 space-y-4 group relative hover:border-emerald-500/10 transition-all shadow-xl">
-                                                        {/* Top Row: Image & Name */}
-                                                        <div className="flex gap-4">
-                                                            <div className="w-20 h-20 rounded-lg overflow-hidden bg-black flex-shrink-0 border border-white/10 shadow-lg relative group/thumb">
-                                                                <img src={p.photo || 'https://via.placeholder.com/150'} className="w-full h-full object-cover opacity-80 group-hover/thumb:opacity-100 transition-opacity" />
-                                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center">
-                                                                    <ImageUpload
-                                                                        compact
-                                                                        onUploadSuccess={(url) => {
-                                                                            const newP = [...allProducts];
-                                                                            newP[idx].photo = url;
-                                                                            setAllProducts(newP);
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
-                                                                <div className="space-y-1">
-                                                                    <label className="text-[7px] font-black text-neutral-600 uppercase tracking-[0.2em] block">Nombre del Producto</label>
-                                                                    <input
-                                                                        className="w-full bg-transparent border-none text-[14px] font-black text-white p-0 focus:ring-0 placeholder:text-neutral-800 italic uppercase leading-tight"
-                                                                        value={p.name}
-                                                                        placeholder="Nombre..."
-                                                                        onChange={(e) => {
-                                                                            const newP = [...allProducts];
-                                                                            newP[idx].name = e.target.value;
-                                                                            setAllProducts(newP);
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <label className="text-[7px] font-black text-neutral-600 uppercase tracking-[0.2em] block">Categoría vinculada</label>
-                                                                    <select
-                                                                        className="w-full bg-black/40 border border-white/5 rounded-md px-2 py-1.5 text-[10px] font-black text-blue-400 outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors"
-                                                                        value={p.categoryIds?.[0] || ''}
-                                                                        onChange={(e) => {
-                                                                            const newP = [...allProducts];
-                                                                            newP[idx].categoryIds = [e.target.value];
-                                                                            setAllProducts(newP);
-                                                                        }}
-                                                                    >
-                                                                        <option value="" className="text-neutral-500">SIN CATEGORÍA</option>
-                                                                        {allCategories.map(cat => (
-                                                                            <option key={cat.id} value={cat.id} className="bg-[#111]">{cat.name}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Price & Currency Row (Better spaced) */}
-                                                        <div className="grid grid-cols-2 gap-2 p-2 bg-black/30 rounded-lg border border-white/5">
-                                                            <div className="space-y-1">
-                                                                <label className="text-[7px] font-black text-neutral-600 uppercase tracking-widest block px-1">Moneda</label>
-                                                                <div className="relative group/curr">
-                                                                    <div className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none text-xs">
-                                                                        {p.currency === 'U$D' ? '🇺🇸' : p.currency === 'R$' ? '🇧🇷' : p.currency === 'AR$' ? '🇦🇷' : '🇺🇾'}
-                                                                    </div>
-                                                                    <select
-                                                                        className="w-full bg-white/5 border border-white/5 rounded-md pl-7 pr-2 py-2 text-[10px] font-black text-white outline-none cursor-pointer appearance-none hover:bg-white/10 transition-colors"
-                                                                        value={p.currency || '$'}
-                                                                        onChange={(e) => {
-                                                                            const newP = [...allProducts];
-                                                                            newP[idx].currency = e.target.value;
-                                                                            setAllProducts(newP);
-                                                                        }}
-                                                                    >
-                                                                        <option value="$">PESOS (UYU)</option>
-                                                                        <option value="U$D">DÓLARES (USD)</option>
-                                                                        <option value="R$">REALES (BRL)</option>
-                                                                        <option value="AR$">P. ARGENTINOS (ARS)</option>
-                                                                    </select>
-                                                                </div>
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                <label className="text-[7px] font-black text-neutral-600 uppercase tracking-widest block px-1">Precio Final</label>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-emerald-500/50 italic opacity-0 md:opacity-100">$</span>
-                                                                    <input
-                                                                        className="w-full bg-white/5 border border-white/5 rounded-md px-2 py-2 text-[14px] font-black text-emerald-500 text-right outline-none focus:border-emerald-500/30 transition-all font-mono"
-                                                                        value={p.price}
-                                                                        type="number"
-                                                                        onChange={(e) => {
-                                                                            const newP = [...allProducts];
-                                                                            newP[idx].price = parseFloat(e.target.value);
-                                                                            setAllProducts(newP);
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <textarea
-                                                            className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px] text-neutral-500 h-20 resize-none outline-none focus:border-emerald-500/50 transition-colors placeholder:text-neutral-800"
-                                                            value={p.description}
-                                                            placeholder="Descripción premium del producto..."
-                                                            onChange={(e) => {
-                                                                const newP = [...allProducts];
-                                                                newP[idx].description = e.target.value;
-                                                                setAllProducts(newP);
-                                                            }}
-                                                        />
-
-                                                        <div className="flex justify-between items-center pt-2 border-t border-white/5">
-                                                            <div className="text-[7px] font-bold text-neutral-700 uppercase tracking-widest italic tracking-tighter shrink-0">ID: {p.id.substring(0, 8)}</div>
-                                                            <button
-                                                                onClick={() => setAllProducts(allProducts.filter((_, i) => i !== idx))}
-                                                                className="flex items-center gap-2 px-3 py-1.5 bg-red-500/5 text-red-500/40 hover:bg-red-500 hover:text-white rounded-lg text-[9px] font-black uppercase transition-all"
-                                                            >
-                                                                <Trash2 className="w-3 h-3" /> Eliminar
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                        )}
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {activeTab === 'activities' && (
-                                <motion.div
-                                    key="activities"
-                                    initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
-                                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                                    exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
-                                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                                    className="space-y-6"
-                                >
-                                    <div className="sticky top-0 z-20 bg-[#080808] pb-6 flex justify-between items-center gap-4">
-                                        <h2 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2 italic">
-                                            <RefreshCw className="w-3 h-3" /> Cronograma de Actividades
-                                        </h2>
-                                        <button
-                                            onClick={() => setAllActivities([...allActivities, { category: 'CINE', time: '20:00', title: 'Nueva Actividad', desc: '', photo: '' }])}
-                                            className="w-8 h-8 bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white rounded-lg transition-all flex items-center justify-center border border-amber-500/20 active:scale-90"
-                                            title="Nueva Actividad"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-4 pb-20 overflow-x-hidden pr-2 custom-scrollbar max-h-[calc(100vh-250px)] overflow-y-auto">
-                                        {allActivities.map((a, idx) => (
-                                            <div key={idx} className="bg-[#111]/50 p-4 rounded-xl border border-white/5 space-y-4 group hover:border-amber-500/10 transition-all shadow-xl">
-                                                {/* Top Row: Category & Time */}
-                                                <div className="grid grid-cols-5 gap-2">
-                                                    <div className="col-span-3 space-y-1">
-                                                        <label className="text-[7px] font-black text-neutral-600 uppercase tracking-widest block px-1">Sección/Lugar</label>
-                                                        <input
-                                                            className="w-full bg-black/40 border border-white/5 rounded-md px-3 py-1.5 text-[10px] font-black text-amber-500 uppercase outline-none focus:border-amber-500/30 transition-all italic"
-                                                            value={a.category}
-                                                            onChange={(e) => {
-                                                                const newA = [...allActivities];
-                                                                newA[idx].category = e.target.value.toUpperCase();
-                                                                setAllActivities(newA);
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <div className="col-span-2 space-y-1">
-                                                        <label className="text-[7px] font-black text-neutral-600 uppercase tracking-widest block px-1">Horario</label>
-                                                        <input
-                                                            className="w-full bg-black/30 border border-white/5 rounded-md px-2 py-1.5 text-[10px] font-black text-white text-center outline-none focus:border-amber-500/30 transition-all font-mono"
-                                                            value={a.time}
-                                                            placeholder="00:00 a 00:00"
-                                                            onChange={(e) => {
-                                                                const newA = [...allActivities];
-                                                                newA[idx].time = e.target.value;
-                                                                setAllActivities(newA);
-                                                            }}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Middle: Title & Image Thumb */}
-                                                <div className="flex gap-4">
-                                                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-black flex-shrink-0 border border-white/10 relative group/actphoto">
-                                                        <img src={a.photo || 'https://via.placeholder.com/150'} className="w-full h-full object-cover opacity-60 group-hover/actphoto:opacity-100 transition-opacity" />
-                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/actphoto:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <ImageUpload
-                                                                compact
-                                                                onUploadSuccess={(url) => {
-                                                                    const newA = [...allActivities];
-                                                                    newA[idx].photo = url;
-                                                                    setAllActivities(newA);
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex-1 space-y-1 py-1">
-                                                        <label className="text-[7px] font-black text-neutral-600 uppercase tracking-widest block">Nombre de la Actividad</label>
-                                                        <input
-                                                            className="w-full bg-transparent border-none text-[13px] font-black text-white p-0 focus:ring-0 placeholder:text-neutral-800 italic uppercase leading-tight"
-                                                            value={a.title}
-                                                            onChange={(e) => {
-                                                                const newA = [...allActivities];
-                                                                newA[idx].title = e.target.value;
-                                                                setAllActivities(newA);
-                                                            }}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <textarea
-                                                    className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[10px] text-neutral-500 h-16 resize-none outline-none focus:border-amber-500/50 transition-colors placeholder:text-neutral-800"
-                                                    value={a.desc}
-                                                    placeholder="Detalles de la actividad (capacidad, requisitos...)"
-                                                    onChange={(e) => {
-                                                        const newA = [...allActivities];
-                                                        newA[idx].desc = e.target.value;
-                                                        setAllActivities(newA);
-                                                    }}
-                                                />
-
-                                                <div className="flex justify-between items-center pt-2 border-t border-white/5">
-                                                    <div className="text-[7px] font-bold text-neutral-700 uppercase tracking-widest italic tracking-tighter">Actividad #{idx + 1}</div>
-                                                    <button
-                                                        onClick={() => setAllActivities(allActivities.filter((_, i) => i !== idx))}
-                                                        className="flex items-center gap-2 px-3 py-1.5 bg-red-500/5 text-red-500/40 hover:bg-red-500 hover:text-white rounded-lg text-[9px] font-black uppercase transition-all"
-                                                    >
-                                                        <Trash2 className="w-3 h-3" /> ELIMINAR
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </motion.div>
-                            )}
-
-
-
-                            {activeTab === 'flow' && (
-                                <div className="h-full flex flex-col">
-                                    <div className="flex justify-between items-center mb-6 pl-2">
-                                        <h2 className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] flex items-center gap-2">
-                                            <Network className="w-3 h-3" /> Mapa de Navegación
-                                        </h2>
-                                    </div>
-                                    <div className="flex-1 bg-[#111] rounded-xl border border-white/5 overflow-hidden relative">
-                                        <FlowMap
-                                            layouts={savedLayouts}
-                                            onEditLayout={(l) => {
-                                                loadLayout(l);
-                                                setActiveTab('components'); // Switch to editor, or stay in flow? Usually editor is what user wants.
-                                                // Actually loadLayout updates state, but UI is split by tabs.
-                                                // If loadLayout sets 'editingLayoutId', usually the main view is 'components' or editing mode.
-                                                // But in this new tabs design (components, layouts, flow...), editing happens in the center canvas which is always visible unless hidden?
-                                                // Ah, looking at layout: Canvas is visible always (line 803+). The sidebar tabs just change the *left panel*.
-                                                // So if I click a node, I want to see its properties.
-                                                // loadLayout sets selectedWidgetId(null) and updates widgets array. The Canvas updates immediately.
-                                                // I probably don't need to change tab, but maybe switching to 'components' allows adding new widgets. 
-                                                // Let's keep it simple: just loadLayout. The user sees the canvas update.
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeTab === 'screens' && (
-                                <motion.div
-                                    key="screens"
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-6"
-                                >
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h2 className="text-[10px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
-                                            <Smartphone className="w-3 h-3 text-blue-500" /> Gestión de Pantallas Centralizada
-                                        </h2>
-                                        <span className="text-[9px] font-black text-neutral-600 uppercase tracking-widest">{screens.length} Activas</span>
-                                    </div>
-
-                                    <div className="space-y-6 pb-20">
-                                        {screens.length === 0 ? (
-                                            <div className="bg-[#111] p-10 rounded-xl border border-white/5 text-center space-y-4">
-                                                <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto">
-                                                    <Smartphone className="w-6 h-6 text-neutral-700" />
-                                                </div>
-                                                <p className="text-[10px] text-neutral-600 italic uppercase tracking-widest">Esperando que nuevas pantallas se conecten...</p>
-                                            </div>
-                                        ) : (
-                                            screens.map((s) => {
-                                                const isOnline = Date.now() - new Date(s.lastSeen).getTime() < 15000;
-                                                const playerUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/player/${s.screenId}`;
-
-                                                return (
-                                                    <div key={s.screenId} className={`relative p-6 rounded-xl border transition-all overflow-hidden ${screenId === s.screenId ? 'bg-blue-600/5 border-blue-500/40 shadow-2xl' : 'bg-[#111] border-white/5 hover:border-white/10'}`}>
-                                                        {/* Status Header */}
-                                                        <div className="flex items-center justify-between mb-6">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]' : 'bg-red-500/50'}`} />
-                                                                <input
-                                                                    className="bg-transparent border-none text-base font-black text-white focus:ring-0 p-0 w-48 placeholder:text-neutral-700 italic uppercase tracking-tighter"
-                                                                    value={s.name || s.screenId}
-                                                                    onChange={(e) => socket.emit('rename_screen', { screenId: s.screenId, name: e.target.value })}
-                                                                />
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-md ${isOnline ? 'text-emerald-500 bg-emerald-500/10' : 'text-neutral-600 bg-white/5'}`}>
-                                                                    {isOnline ? 'ONLINE' : 'OFFLINE'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Assigned Menu / Layout */}
-                                                        <div className="space-y-3 mb-6">
-                                                            <label className="text-[8px] font-black text-neutral-600 uppercase tracking-widest block">Menú Asignado (Layout)</label>
-                                                            <select
-                                                                className="w-full bg-black/40 border border-white/5 rounded-lg px-4 py-3 text-[11px] font-black italic text-blue-400 outline-none focus:border-blue-500/50 appearance-none"
-                                                                value={s.lastLayoutId || ''}
-                                                                onChange={(e) => socket.emit('assign_layout_to_screen', { screenId: s.screenId, layoutId: e.target.value })}
-                                                            >
-                                                                <option value="">(Sin asignar)</option>
-                                                                {savedLayouts.map(l => (
-                                                                    <option key={l._id} value={l._id}>{l.name}</option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-
-                                                        {/* Assigned Schedule */}
-                                                        <div className="space-y-3 mb-6">
-                                                            <label className="text-[8px] font-black text-neutral-600 uppercase tracking-widest block">Calendario Programado (Opcional)</label>
-                                                            <select
-                                                                className="w-full bg-black/40 border border-white/5 rounded-lg px-4 py-3 text-[11px] font-black italic text-emerald-400 outline-none focus:border-emerald-500/50 appearance-none"
-                                                                value={s.scheduleId || ''}
-                                                                onChange={(e) => socket.emit('assign_schedule_to_screen', { screenId: s.screenId, scheduleId: e.target.value })}
-                                                            >
-                                                                <option value="">(Manual - Sin Calendario)</option>
-                                                                {allSchedules.map(sch => (
-                                                                    <option key={sch._id} value={sch._id}>{sch.name.toUpperCase()}</option>
-                                                                ))}
-                                                            </select>
-                                                            <p className="text-[8px] text-neutral-600 font-bold uppercase italic px-1">
-                                                                * Si asignas un calendario, el diseño cambiará automáticamente según el horario.
-                                                            </p>
-                                                        </div>
-
-                                                        {/* URL Display */}
-                                                        <div className="bg-black/40 p-3 rounded-lg border border-white/5 flex items-center justify-between gap-4 mb-6">
-                                                            <div className="flex-1 min-w-0">
-                                                                <label className="text-[7px] font-black text-neutral-700 uppercase tracking-widest block mb-1">Display URL</label>
-                                                                <div className="text-[10px] font-mono text-neutral-500 truncate select-all">{playerUrl}</div>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => {
-                                                                    navigator.clipboard.writeText(playerUrl);
-                                                                    // Optional: add toast
-                                                                }}
-                                                                className="p-2 hover:bg-white/5 rounded-md text-neutral-500 hover:text-white transition-all"
-                                                                title="Copiar URL"
-                                                            >
-                                                                <Copy className="w-4 h-4" />
-                                                            </button>
-                                                            <Link href={playerUrl} target="_blank">
-                                                                <button className="p-2 hover:bg-white/5 rounded-md text-blue-500 hover:text-blue-400 transition-all">
-                                                                    <Eye className="w-4 h-4" />
-                                                                </button>
-                                                            </Link>
-                                                        </div>
-
-                                                        <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                                                            <button
-                                                                onClick={() => socket.emit('authorize_screen', { screenId: s.screenId, isAuthorized: !s.isAuthorized })}
-                                                                className={`flex items-center gap-2 group/auth text-[9px] font-black uppercase transition-all px-4 py-2 rounded-lg ${s.isAuthorized ? 'text-emerald-500 hover:text-emerald-400 bg-emerald-500/5' : 'text-red-500/40 hover:text-red-500 bg-red-500/5'}`}
-                                                            >
-                                                                <Zap className={`w-3.5 h-3.5 ${s.isAuthorized ? 'fill-emerald-500' : ''}`} />
-                                                                {s.isAuthorized ? 'Acceso Autorizado' : 'Restringir Acceso'}
-                                                            </button>
-
-                                                            <button
-                                                                onClick={() => setScreenId(s.screenId)}
-                                                                className={`text-[10px] font-black px-6 py-2 rounded-lg transition-all flex items-center gap-2 ${screenId === s.screenId ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white/5 text-neutral-500 hover:text-white border border-white/5'}`}
-                                                            >
-                                                                <RefreshCw className={`w-3.5 h-3.5 ${screenId === s.screenId ? 'animate-spin-slow' : ''}`} />
-                                                                {screenId === s.screenId ? 'MODO CONTROL' : 'CONTROLAR'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
-                </motion.aside >
+                </motion.aside>
 
                 {/* Main Workspace (Canvas Area) */}
-                < main className="flex-1 bg-[#0a0a0a] p-12 overflow-hidden relative" >
+                {/* Main Workspace (Canvas Area) */}
+                <main className="flex-1 bg-[#0a0a0a] p-12 overflow-hidden relative">
                     {/* Background Texture */}
-                    < div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }
-                    } />
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
 
-                    < div className="h-full flex flex-col gap-8 max-w-[1400px] mx-auto relative z-10" >
+                    <div className="h-full flex flex-col gap-8 max-w-[1400px] mx-auto relative z-10">
                         {/* Status/Control Bar */}
-                        < div className="flex items-center justify-between" >
+                        <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-blue-600/10 rounded-lg">
                                     <Palette className="w-5 h-5 text-blue-500" />
@@ -1228,9 +608,16 @@ export default function AdminDashboard() {
                                     <Smartphone className="w-4 h-4" /> Portrait
                                 </button>
                             </div>
-                        </div >
+                            <div className="bg-[#111] px-4 py-2 rounded-lg border border-white/5 flex items-center gap-2">
+                                <div className="flex flex-col items-end">
+                                    <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Resolución</span>
+                                    <span className="text-[10px] font-mono font-bold text-blue-400">
+                                        {orientation === 'landscape' ? '1920 x 1080' : '1080 x 1920'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
 
-                        {/* Interactive Canvas */}
                         {/* Interactive Canvas */}
                         <div className="flex-1 min-h-0 bg-[#050505] rounded-xl border border-white/5 shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-auto p-6 relative group custom-scrollbar">
                             <Canvas
@@ -1256,8 +643,8 @@ export default function AdminDashboard() {
                                 </div>
                             )}
                         </div>
-                    </div >
-                </main >
+                    </div>
+                </main>
 
                 {/* Properties Inspector Panel */}
                 <motion.aside
@@ -1295,7 +682,7 @@ export default function AdminDashboard() {
                                                 </button>
                                             </div>
                                             <h3 className="text-xl font-black uppercase tracking-tighter text-white">Editar Propiedades</h3>
-                                        </div >
+                                        </div>
 
                                         <section className="p-8 space-y-8">
                                             <div className="space-y-4">
@@ -2146,8 +1533,8 @@ export default function AdminDashboard() {
                                                 <Trash2 className="w-4 h-4" /> Eliminar Objeto
                                             </button>
                                         </div>
-                                    </div >
-                                </div >
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="flex-1 flex flex-col p-8 space-y-10 overflow-y-auto">
                                     <div className="space-y-10">
@@ -2299,132 +1686,21 @@ export default function AdminDashboard() {
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="bg-blue-600/5 p-8 rounded-lg border border-blue-500/10 space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                            <Globe className="w-4 h-4" /> Centro de Operaciones
-                                        </h4>
-                                        <p className="text-[11px] text-neutral-400 font-medium leading-relaxed">
-                                            Desde aquí controlas la estética global. Todo cambio se sincroniza en tiempo real con las pantallas activas del hotel.
-                                        </p>
+                                        <div className="bg-blue-600/5 p-8 rounded-lg border border-blue-500/10 space-y-4">
+                                            <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <Globe className="w-4 h-4" /> Centro de Operaciones
+                                            </h4>
+                                            <p className="text-[11px] text-neutral-400 font-medium leading-relaxed">
+                                                Desde aquí controlas la estética global. Todo cambio se sincroniza en tiempo real con las pantallas activas del hotel.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             )
                         }
-
-                        {activeTab === 'settings' && (
-                            <motion.div
-                                key="settings"
-                                initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
-                                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                                exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
-                                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                                className="space-y-6"
-                            >
-                                <div className="sticky top-0 z-20 bg-[#080808] pb-6">
-                                    <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em] flex items-center gap-2">
-                                        <Settings2 className="w-3 h-3" /> Configuración
-                                    </h2>
-                                </div>
-
-                                <div className="bg-[#111] p-6 rounded-xl border border-white/5 space-y-6">
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className="p-3 bg-blue-500/10 rounded-lg">
-                                            <Lock className="w-6 h-6 text-blue-500" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-white italic tracking-tighter uppercase">Seguridad</h3>
-                                            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Gestionar acceso y credenciales</p>
-                                        </div>
-                                    </div>
-
-                                    <form onSubmit={async (e) => {
-                                        e.preventDefault();
-                                        const form = e.target as HTMLFormElement;
-                                        const currentPassword = (form.elements.namedItem('currentPassword') as HTMLInputElement).value;
-                                        const newPassword = (form.elements.namedItem('newPassword') as HTMLInputElement).value;
-
-                                        try {
-                                            const res = await fetch('/api/auth/change-password', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({ currentPassword, newPassword })
-                                            });
-
-                                            if (res.ok) {
-                                                alert('Contraseña actualizada correctamente');
-                                                form.reset();
-                                            } else {
-                                                const data = await res.json();
-                                                alert(data.error || 'Error al actualizar la contraseña');
-                                            }
-                                        } catch (err) {
-                                            alert('Error de conexión');
-                                        }
-                                    }} className="max-w-md">
-                                        <div className="space-y-5">
-                                            <div className="space-y-2">
-                                                <label className="text-[9px] text-neutral-400 font-black uppercase tracking-widest ml-1">Contraseña Actual</label>
-                                                <div className="relative group">
-                                                    <input
-                                                        name="currentPassword"
-                                                        type="password"
-                                                        className="w-full bg-black/40 border border-white/10 rounded-lg pl-4 pr-4 py-3 text-xs font-bold text-white focus:border-blue-500/50 outline-none transition-all focus:bg-blue-900/10"
-                                                        placeholder="••••••••"
-                                                        required
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <label className="text-[9px] text-neutral-400 font-black uppercase tracking-widest ml-1">Nueva Contraseña</label>
-                                                <div className="relative group">
-                                                    <input
-                                                        name="newPassword"
-                                                        type="password"
-                                                        className="w-full bg-black/40 border border-white/10 rounded-lg pl-4 pr-4 py-3 text-xs font-bold text-white focus:border-blue-500/50 outline-none transition-all focus:bg-blue-900/10"
-                                                        placeholder="Nueva contraseña segura"
-                                                        required
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <button
-                                                type="submit"
-                                                className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-900/20 active:scale-95 flex items-center justify-center gap-2 mt-2"
-                                            >
-                                                <Save className="w-4 h-4" /> Actualizar Credenciales
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-
-                                <div className="bg-[#111] p-6 rounded-xl border border-white/5 flex items-center justify-between group hover:border-white/10 transition-all">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 bg-neutral-800 rounded-lg">
-                                            <Monitor className="w-6 h-6 text-neutral-400" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-sm font-black text-white italic tracking-wider uppercase mb-1">PixelFlow Core</h3>
-                                            <div className="flex gap-3 text-[9px] text-neutral-500 font-mono font-bold uppercase tracking-widest">
-                                                <span>v2.0.0 PRO</span>
-                                                <span className="text-neutral-700">|</span>
-                                                <span>Build 2024.10</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
-                                        <span className="text-[9px] font-black text-green-500 uppercase tracking-wider flex items-center gap-1.5">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                            Sistema Activo
-                                        </span>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
                     </div>
-                </motion.aside >
+                </motion.aside>
             </div >
 
             {/* Custom Styled Confirmation Modal */}

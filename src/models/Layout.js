@@ -24,6 +24,7 @@ const LayoutSchema = new mongoose.Schema({
     backgroundOverlayOpacity: { type: Number, default: 0.5 },
     backgroundPattern: { type: String, default: 'none' },
     backgroundPatternOpacity: { type: Number, default: 0.2 },
+    modifiedBy: { type: String, default: 'Admin' },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
 });

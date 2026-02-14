@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
     Calendar, ArrowLeft, Plus, RefreshCw, Zap, Clock, Database,
-    Smartphone, Search, Trash2, Box, Layout as LayoutIcon, ChevronRight
+    Smartphone, Search, Trash2, Layout as LayoutIcon, ChevronRight
 } from 'lucide-react';
 import { ScheduleCanvas } from '@/components/admin/ScheduleCanvas';
 
@@ -19,6 +19,7 @@ export default function SchedulesAdminPage() {
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newScheduleName, setNewScheduleName] = useState('');
+    const [newScheduleType, setNewScheduleType] = useState<'day' | 'week' | 'month'>('week');
 
     const fetchData = useCallback(() => {
         if (socket) {
@@ -197,12 +198,30 @@ export default function SchedulesAdminPage() {
                                         className="w-full bg-black/50 border border-white/5 rounded-2xl px-6 py-4 text-white font-bold italic outline-none focus:border-emerald-500/50 transition-all shadow-inner"
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && newScheduleName.trim()) {
-                                                socket.emit('save_schedule', { name: newScheduleName, events: [] });
+                                                socket.emit('save_schedule', { name: newScheduleName, type: newScheduleType, events: [] });
                                                 setNewScheduleName('');
                                                 setShowCreateModal(false);
                                             }
                                         }}
                                     />
+                                </div>
+
+                                <div className="w-full space-y-2">
+                                    <label className="text-[10px] font-black text-neutral-600 uppercase tracking-widest block text-left ml-2">Tipo de Repetición</label>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <button onClick={() => setNewScheduleType('day')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${newScheduleType === 'day' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500' : 'bg-black/50 border-white/5 text-neutral-500 hover:border-white/10'}`}>
+                                            <Clock className="w-5 h-5" />
+                                            <span className="text-[9px] font-black uppercase tracking-widest">Diario</span>
+                                        </button>
+                                        <button onClick={() => setNewScheduleType('week')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${newScheduleType === 'week' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500' : 'bg-black/50 border-white/5 text-neutral-500 hover:border-white/10'}`}>
+                                            <Calendar className="w-5 h-5" />
+                                            <span className="text-[9px] font-black uppercase tracking-widest">Semanal</span>
+                                        </button>
+                                        <button onClick={() => setNewScheduleType('month')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${newScheduleType === 'month' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500' : 'bg-black/50 border-white/5 text-neutral-500 hover:border-white/10'}`}>
+                                            <Database className="w-5 h-5" />
+                                            <span className="text-[9px] font-black uppercase tracking-widest">Mensual</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 w-full mt-4">
@@ -218,7 +237,7 @@ export default function SchedulesAdminPage() {
                                     <button
                                         disabled={!newScheduleName.trim()}
                                         onClick={() => {
-                                            socket.emit('save_schedule', { name: newScheduleName, events: [] });
+                                            socket.emit('save_schedule', { name: newScheduleName, type: newScheduleType, events: [] });
                                             setNewScheduleName('');
                                             setShowCreateModal(false);
                                         }}
