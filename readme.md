@@ -12,6 +12,7 @@
 
 ### 🎨 PixelFlow Studio (Editor Maestro)
 Diseña la cuadrícula de tu contenido con precisión absoluta. Gestiona widgets dinámicos y publica cambios al instante sin recargas.
+
 <img width="1897" height="940" alt="image" src="https://github.com/user-attachments/assets/c62363a7-0b65-44c0-9423-ae27a83be0d1" />
 
 
