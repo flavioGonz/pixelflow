@@ -360,7 +360,7 @@ export default function ProductsPage() {
                                                 />
                                                 <img
                                                     id="p-preview"
-                                                    src={editingProduct?.photo || ''}
+                                                    src={editingProduct?.photo || undefined}
                                                     className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${editingProduct?.photo ? 'opacity-100' : 'opacity-0'}`}
                                                 />
                                                 <input type="hidden" id="p-photo" defaultValue={editingProduct?.photo || ''} />

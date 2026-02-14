@@ -285,7 +285,7 @@ export default function ActivitiesPage() {
                                             <div className="w-24 h-24 bg-[#111] border border-white/10 rounded-lg overflow-hidden flex-shrink-0 relative shadow-inner">
                                                 <img
                                                     id="a-preview"
-                                                    src={editingActivity?.photo || ''}
+                                                    src={editingActivity?.photo || undefined}
                                                     className={`w-full h-full object-cover transition-opacity duration-300 ${editingActivity?.photo ? 'opacity-100' : 'opacity-0'}`}
                                                 />
                                                 <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300 ${editingActivity?.photo ? 'opacity-0' : 'opacity-100'}`} id="a-placeholder">
