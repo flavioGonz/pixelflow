@@ -19,6 +19,9 @@ Diseña la cuadrícula de tu contenido con precisión absoluta. Gestiona widgets
 ### 🕒 Gestión de Cronogramas
 Automatiza tu comunicación. Programa rutinas horarias, eventos especiales y cronogramas de actividades de forma intuitiva.
 
+<img width="1911" height="937" alt="image" src="https://github.com/user-attachments/assets/52f2781b-58db-45f2-bb6d-9e5f7a1c926c" />
+
+
 ### 🖥️ Monitoreo de Pantallas en Tiempo Real
 Controla y autoriza terminales de forma remota. Estado de conexión vivo, métricas de actividad y gestión de accesos con un solo clic.
 
