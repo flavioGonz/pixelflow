@@ -1,6 +1,7 @@
 # 🚀 PixelFlow - Plataforma de Señalización Digital (SaaS)
 
-![PixelFlow Hero](docs/images/splash.png)
+<img width="1897" height="940" alt="image" src="https://github.com/user-attachments/assets/c62363a7-0b65-44c0-9423-ae27a83be0d1" />
+
 
 **PixelFlow** es una solución de señalización digital (Digital Signage) de alto impacto, diseñada para transformar cualquier pantalla en un canal dinámico y profesional de comunicación. Ideal para hostelería, gimnasios, oficinas y retail.
 
