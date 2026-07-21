@@ -52,8 +52,21 @@ export default function PlayerPage() {
             console.log('Socket Connected');
             setConnected(true);
             setScreenId(id as string);
-            socket.emit('register_screen', { screenId: id });
+            const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
+            const vh = typeof window !== 'undefined' ? window.innerHeight : 0;
+            socket.emit('register_screen', {
+                screenId: id,
+                viewport: { width: vw, height: vh, orientation: vh > vw ? 'portrait' : 'landscape' },
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+            });
         });
+
+        // Heartbeat every 10s so the server keeps the screen marked as online
+        const heartbeatId = setInterval(() => {
+            if (socket && socket.connected) {
+                socket.emit('heartbeat');
+            }
+        }, 10000);
 
         socket.on('connect_error', (err) => {
             console.error('Socket Connection Error:', err);
@@ -85,11 +98,33 @@ export default function PlayerPage() {
         });
 
         return () => {
+            clearInterval(heartbeatId);
             if (socket) {
                 socket.disconnect();
             }
         };
     }, [id, setConnected, setLayout, setScreenId, setAuthorized, pushToHistory]);
+
+    // Report viewport changes (resize, orientation change) to the server
+    useEffect(() => {
+        if (!id) return;
+        const report = () => {
+            if (!socket || !socket.connected) return;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            socket.emit('register_screen', {
+                screenId: id,
+                viewport: { width: vw, height: vh, orientation: vh > vw ? 'portrait' : 'landscape' },
+            });
+        };
+        const onResize = () => { report(); };
+        window.addEventListener('resize', onResize);
+        window.addEventListener('orientationchange', onResize);
+        return () => {
+            window.removeEventListener('resize', onResize);
+            window.removeEventListener('orientationchange', onResize);
+        };
+    }, [id]);
 
     const getYoutubeId = (url: string) => {
         if (!url) return null;

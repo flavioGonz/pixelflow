@@ -20,7 +20,8 @@ const CountdownWidget: React.FC<CountdownWidgetProps> = ({ data }) => {
 
     useEffect(() => {
         const calculate = () => {
-            const difference = +new Date(targetDate) - +new Date();
+            const t = new Date(targetDate).getTime();
+            const difference = isNaN(t) ? 0 : t - Date.now();
             if (difference > 0) {
                 setTimeLeft({
                     d: Math.floor(difference / (1000 * 60 * 60 * 24)),
@@ -204,4 +205,3 @@ const CountdownWidget: React.FC<CountdownWidgetProps> = ({ data }) => {
 };
 
 export default CountdownWidget;
-

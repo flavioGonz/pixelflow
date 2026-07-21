@@ -33,7 +33,7 @@ Módulos dedicados para Menú de Productos y Agendas de Actividades, optimizados
 
 ### 🔐 Seguridad y Perfiles
 Acceso administrativo protegido y gestión de perfiles de usuario avanzada para mantener el control total de tu red.
-<img width="1906" height="785" alt="image" src="https://github.com/user-attachments/assets/8f581067-05be-400c-b626-9caeaee4937c" />
+![Login](docs/images/login.png)
 
 ---
 

@@ -168,9 +168,10 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ data }) => {
 
     return (
         <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="w-full h-full flex flex-col items-center justify-center p-6 md:p-10 relative overflow-hidden group"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="w-full h-full flex flex-col items-center justify-center p-6 md:p-10 relative overflow-hidden group rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl"
         >
             <AnimatePresence mode="wait">
                 {loading ? (
@@ -189,14 +190,23 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ data }) => {
                         animate={{ opacity: 1 }}
                         className="text-center"
                     >
-                        <p className="text-red-500 text-[10px] font-black uppercase mb-2">{error}</p>
-                        <button onClick={() => fetchWeather()} className="text-[8px] bg-white/10 px-3 py-1 rounded-full uppercase font-bold">Reintentar</button>
+                        <p className="text-red-500 text-[10px] font-black uppercase mb-4">{error}</p>
+                        <motion.button 
+                            whileTap={{ scale: 0.94 }}
+                            whileHover={{ scale: 1.02 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                            onClick={() => fetchWeather()} 
+                            className="text-[10px] bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-xl uppercase font-bold transition-colors hover:bg-white/20"
+                        >
+                            Reintentar
+                        </motion.button>
                     </motion.div>
                 ) : (
                     <motion.div
                         key="weather-content"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20, staggerChildren: 0.05 }}
                         className="flex flex-col items-center gap-0 w-full"
                     >
                         <div className="mt-8 mb-0 flex flex-col items-center gap-1">

@@ -6,8 +6,8 @@ import { LayoutJSON, WidgetType, WidgetConfig } from '@/store/usePlayerStore';
 import {
     Plus, Trash2, Smartphone, Monitor, ShoppingBag, Utensils,
     Layout as LayoutIcon, Settings2, Maximize, Save, Layers,
-    Database, RefreshCw, Eye, MousePointer2, Palette,
-    ChevronRight, ChevronLeft, Zap, Globe, Image as ImageIcon, Sparkles, ArrowLeft, Copy, Network, Clock, Search,
+    Database, RefreshCw, Eye, EyeOff, MousePointer2, Palette,
+    ChevronRight, ChevronLeft, Zap, Globe, Image as ImageIcon, Sparkles, ArrowLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, Copy, Network, Clock, Search,
     Megaphone, Instagram, PlaneTakeoff, Music, PanelLeftClose, PanelRightClose, PanelLeftOpen, PanelRightOpen,
     ChevronDown, Link as LinkIcon, Calendar, LogOut, Lock
 } from 'lucide-react';
@@ -17,20 +17,44 @@ import { ImageUpload } from '@/components/builder/ImageUpload';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useEditorShortcuts } from '@/hooks/useEditorShortcuts';
+import { WidgetPalette } from '@/components/builder/WidgetPalette';
+import { FloatingToolbar } from '@/components/builder/FloatingToolbar';
+import { StatusBar } from '@/components/builder/StatusBar';
+import { FloatingRightDock } from '@/components/builder/FloatingRightDock';
+import X from 'lucide-react/dist/esm/icons/x';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 
 
 let socket: Socket;
 
-export default function AdminDashboard() {
+export default function AdminDashboardPage() {
+    return (
+        <React.Suspense fallback={<div className="flex-1 grid place-items-center text-muted-foreground">Cargando Studio…</div>}>
+            <AdminDashboard />
+        </React.Suspense>
+    );
+}
+
+function AdminDashboard() {
     const [screenId, setScreenId] = useState('pantalla-1');
     const [layoutName, setLayoutName] = useState('Mi Primer Layout');
     const [widgets, setWidgets] = useState<WidgetConfig[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
     const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
+    const [resolution, setResolution] = useState<{ width: number; height: number }>({ width: 1920, height: 1080 });
     const [backgroundImage, setBackgroundImage] = useState('');
     const [backgroundVideo, setBackgroundVideo] = useState('');
-    const [backgroundColor, setBackgroundColor] = useState('#000000');
+    const [backgroundColor, setBackgroundColor] = useState('#ffffff');
     const [backgroundBlur, setBackgroundBlur] = useState(0);
     const [backgroundOverlayColor, setBackgroundOverlayColor] = useState('#000000');
     const [backgroundOverlayOpacity, setBackgroundOverlayOpacity] = useState(0.5);
@@ -40,11 +64,159 @@ export default function AdminDashboard() {
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [layoutToDelete, setLayoutToDelete] = useState<any>(null);
     const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-    const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+    const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+    const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; visible: boolean }>({ x: 0, y: 0, visible: false });
 
     const router = useRouter();
     const searchParams = useSearchParams();
     const layoutIdParam = searchParams.get('id');
+
+    // -------- Undo/Redo --------
+    const historyPastRef = React.useRef<WidgetConfig[][]>([]);
+    const historyFutureRef = React.useRef<WidgetConfig[][]>([]);
+    const lastCommittedRef = React.useRef<WidgetConfig[]>([]);
+
+    const commitHistory = useCallback(() => {
+        const snap = JSON.parse(JSON.stringify(widgets));
+        if (JSON.stringify(lastCommittedRef.current) === JSON.stringify(snap)) return;
+        historyPastRef.current = [...historyPastRef.current, lastCommittedRef.current].slice(-50);
+        historyFutureRef.current = [];
+        lastCommittedRef.current = snap;
+    }, [widgets]);
+
+    const setWidgetsWithHistory = useCallback(
+        (next: WidgetConfig[] | ((p: WidgetConfig[]) => WidgetConfig[]), opts?: { skipHistory?: boolean }) => {
+            setWidgets((prev) => {
+                const value = typeof next === 'function' ? (next as any)(prev) : next;
+                if (!opts?.skipHistory) {
+                    historyPastRef.current = [...historyPastRef.current, lastCommittedRef.current].slice(-50);
+                    historyFutureRef.current = [];
+                    lastCommittedRef.current = JSON.parse(JSON.stringify(value));
+                }
+                return value;
+            });
+        }, []);
+
+    const undo = useCallback(() => {
+        if (historyPastRef.current.length === 0) return;
+        const previous = historyPastRef.current[historyPastRef.current.length - 1];
+        historyPastRef.current = historyPastRef.current.slice(0, -1);
+        setWidgets((current) => {
+            historyFutureRef.current = [JSON.parse(JSON.stringify(current)), ...historyFutureRef.current].slice(0, 50);
+            lastCommittedRef.current = JSON.parse(JSON.stringify(previous));
+            return JSON.parse(JSON.stringify(previous));
+        });
+    }, []);
+
+    const redo = useCallback(() => {
+        if (historyFutureRef.current.length === 0) return;
+        const next = historyFutureRef.current[0];
+        historyFutureRef.current = historyFutureRef.current.slice(1);
+        setWidgets((current) => {
+            historyPastRef.current = [...historyPastRef.current, JSON.parse(JSON.stringify(current))].slice(-50);
+            lastCommittedRef.current = JSON.parse(JSON.stringify(next));
+            return JSON.parse(JSON.stringify(next));
+        });
+    }, []);
+
+    React.useEffect(() => {
+        if (lastCommittedRef.current.length === 0 && widgets.length > 0) {
+            lastCommittedRef.current = JSON.parse(JSON.stringify(widgets));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [widgets.length]);
+
+    const nudge = useCallback((dx: number, dy: number) => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.map((w) => w.id === selectedWidgetId
+            ? { ...w, x: Math.max(0, Math.min(100 - w.w, w.x + dx)), y: Math.max(0, Math.min(100 - w.h, w.y + dy)) } : w));
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const deleteSelected = useCallback(() => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.filter((w) => w.id !== selectedWidgetId));
+        setSelectedWidgetId(null);
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const duplicateSelected = useCallback(() => {
+        if (!selectedWidgetId) return;
+        const src = widgets.find((w) => w.id === selectedWidgetId);
+        if (!src) return;
+        const copy: WidgetConfig = {
+            ...JSON.parse(JSON.stringify(src)),
+            id: 'w-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+            x: Math.min(100 - src.w, src.x + 2),
+            y: Math.min(100 - src.h, src.y + 2),
+        };
+        setWidgetsWithHistory((prev) => [...prev, copy]);
+        setSelectedWidgetId(copy.id);
+    }, [selectedWidgetId, widgets, setWidgetsWithHistory]);
+
+    const bringForward = useCallback(() => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.map((w) => w.id === selectedWidgetId ? { ...w, zIndex: (w.zIndex || 1) + 1 } : w));
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const sendBackward = useCallback(() => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.map((w) => w.id === selectedWidgetId ? { ...w, zIndex: Math.max(1, (w.zIndex || 1) - 1) } : w));
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const bringToFrontWidget = useCallback((id: string) => {
+        setWidgetsWithHistory((prev) => {
+            const maxZ = prev.reduce((acc, w) => Math.max(acc, w.zIndex || 1), 0);
+            return prev.map((w) => w.id === id ? { ...w, zIndex: maxZ + 1 } : w);
+        });
+    }, [setWidgetsWithHistory]);
+
+    const sendToBackWidget = useCallback((id: string) => {
+        setWidgetsWithHistory((prev) => {
+            const minZ = prev.reduce((acc, w) => Math.min(acc, w.zIndex || 1), Infinity);
+            return prev.map((w) => w.id === id ? { ...w, zIndex: Math.max(1, minZ - 1) } : w);
+        });
+    }, [setWidgetsWithHistory]);
+
+    const moveLayerUp = useCallback((id: string) => {
+        setWidgetsWithHistory((prev) => prev.map((w) => w.id === id ? { ...w, zIndex: (w.zIndex || 1) + 1 } : w));
+    }, [setWidgetsWithHistory]);
+
+    const moveLayerDown = useCallback((id: string) => {
+        setWidgetsWithHistory((prev) => prev.map((w) => w.id === id ? { ...w, zIndex: Math.max(1, (w.zIndex || 1) - 1) } : w));
+    }, [setWidgetsWithHistory]);
+
+    const removeWidget = useCallback((id: string) => {
+        setWidgetsWithHistory((prev) => prev.filter((w) => w.id !== id));
+        if (selectedWidgetId === id) setSelectedWidgetId(null);
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const alignToCanvas = useCallback((axis: 'left'|'center-h'|'right'|'top'|'center-v'|'bottom') => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.map((w) => {
+            if (w.id !== selectedWidgetId) return w;
+            let { x, y } = w;
+            if (axis === 'left') x = 0;
+            if (axis === 'center-h') x = (100 - w.w) / 2;
+            if (axis === 'right') x = 100 - w.w;
+            if (axis === 'top') y = 0;
+            if (axis === 'center-v') y = (100 - w.h) / 2;
+            if (axis === 'bottom') y = 100 - w.h;
+            return { ...w, x, y };
+        }));
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const canvasContainerRef = React.useRef<HTMLDivElement>(null);
+
+    useEditorShortcuts({
+        selectedId: selectedWidgetId,
+        onNudge: nudge,
+        onDelete: deleteSelected,
+        onDuplicate: duplicateSelected,
+        onUndo: undo,
+        onRedo: redo,
+        onBringForward: bringForward,
+        onSendBackward: sendBackward,
+        onDeselect: () => setSelectedWidgetId(null),
+    });
 
     // DB States
     const [savedLayouts, setSavedLayouts] = useState<any[]>([]);
@@ -130,15 +302,17 @@ export default function AdminDashboard() {
         }));
     }, [allProducts, allActivities, allCategories]);
 
-    const addWidget = (type: WidgetType) => {
+    const addWidget = (type: WidgetType | string, opts?: { x?: number; y?: number }) => {
         const newWidget: WidgetConfig = {
             id: Math.random().toString(36).substr(2, 9),
-            type,
-            x: 10, y: 10, w: 30, h: 30,
+            type: type as WidgetType,
+            x: opts?.x ?? 10,
+            y: opts?.y ?? 10,
+            w: 30, h: 30,
             zIndex: 1,
-            data: getDefaultData(type),
+            data: getDefaultData(type as WidgetType),
         };
-        setWidgets([...widgets, newWidget]);
+        setWidgetsWithHistory((prev) => [...prev, newWidget]);
         setSelectedWidgetId(newWidget.id);
     };
 
@@ -252,6 +426,10 @@ export default function AdminDashboard() {
                 cover: '',
                 accentColor: '#10b981'
             };
+            case 'ATMOSPHERE': return {
+                preset: 'sunset',
+                intensity: 0.5,
+            };
             case 'DATE_TIME': return {
                 style: 'MODERN'
             };
@@ -273,49 +451,41 @@ export default function AdminDashboard() {
         ));
     };
 
+    const updateSelectedWidgetPos = (key: 'x' | 'y', val: number) => {
+        setWidgets(widgets.map(w =>
+            w.id === selectedWidgetId ? { ...w, [key]: val } : w
+        ));
+    };
+
     const pushOnly = () => {
+        if (!screenId) { toast.error('Seleccioná un monitor de destino primero.'); return; }
         const layout: LayoutJSON = {
-            id: 'preview',
-            name: layoutName,
-            orientation,
-            widgets,
-            backgroundColor,
-            backgroundImage,
-            backgroundVideo,
-            backgroundBlur,
-            backgroundOverlayColor,
-            backgroundOverlayOpacity,
-            backgroundPattern,
-            backgroundPatternOpacity,
+            id: 'preview', name: layoutName, orientation, widgets,
+            backgroundColor, backgroundImage, backgroundVideo, backgroundBlur,
+            backgroundOverlayColor, backgroundOverlayOpacity,
+            backgroundPattern, backgroundPatternOpacity,
         };
         socket.emit('update_content', { screenId, layout });
+        toast.success('Vista previa enviada a ' + screenId);
     };
 
     const saveLayout = (isNew: boolean = false) => {
-        if (!confirm(`¿Guardar layout con orientación ${orientation.toUpperCase()}?`)) return;
+        if (!layoutName || !layoutName.trim()) {
+            toast.error('Asigná un nombre al diseño antes de guardarlo.');
+            return;
+        }
         const isExisting = !isNew && editingLayoutId;
         const layout: any = {
-            name: layoutName,
-            orientation,
-            widgets,
-            backgroundColor,
-            backgroundImage,
-            backgroundVideo,
-            backgroundBlur,
-            backgroundOverlayColor,
-            backgroundOverlayOpacity,
-            backgroundPattern,
-            backgroundPatternOpacity,
+            name: layoutName, orientation, widgets,
+            backgroundColor, backgroundImage, backgroundVideo, backgroundBlur,
+            backgroundOverlayColor, backgroundOverlayOpacity,
+            backgroundPattern, backgroundPatternOpacity,
         };
-        // Include _id for existing layouts so the backend uses findByIdAndUpdate
-        if (isExisting) {
-            layout._id = editingLayoutId;
-        }
+        if (isExisting) layout._id = editingLayoutId;
         socket.emit('save_layout', { screenId, layout });
-        // Force refresh layouts list after a small delay to ensure DB persistence
-        setTimeout(() => {
-            fetchLayouts();
-        }, 500);
+        toast.success(isExisting ? 'Diseño actualizado' : 'Diseño guardado',
+            { description: layoutName + ' · ' + orientation });
+        setTimeout(() => fetchLayouts(), 500);
     };
 
     const saveAndPush = () => {
@@ -360,272 +530,78 @@ export default function AdminDashboard() {
     };
 
     return (
-        <div className="h-screen bg-[#050505] text-neutral-100 flex flex-col font-sans selection:bg-blue-500/30">
-            {/* Professional Glass Header */}
-            <header className="h-20 border-b border-white/5 px-10 flex items-center justify-between bg-black/40 backdrop-blur-2xl sticky top-0 z-[100]">
-                <div className="flex items-center gap-6">
-                    <Link href="/">
-                        <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-white/10 text-white font-bold uppercase border border-white/5 shadow-lg active:scale-95 transition-transform text-xs">
-                            <ArrowLeft className="w-4 h-4" /> Volver
-                        </button>
-                    </Link>
-                    <button
-                        onClick={async () => {
-                            await fetch('/api/auth/logout', { method: 'POST' });
-                            router.push('/login');
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white font-bold uppercase border border-red-500/20 shadow-lg active:scale-95 transition-all text-xs"
-                    >
-                        <LogOut className="w-4 h-4" /> Cerrar Sesión
-                    </button>
-                    <div className="h-8 w-[1px] bg-white/10" />
-                    <motion.div
-                        initial={{ rotate: -10 }}
-                        animate={{ rotate: 0 }}
-                        className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-md flex items-center justify-center shadow-2xl shadow-blue-600/40 relative group"
-                    >
-                        <Zap className="w-7 h-7 text-white group-hover:scale-110 transition-transform" />
-                        <div className="absolute inset-0 bg-white/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </motion.div>
-                    <div className="flex-shrink-0">
-                        <div className="flex items-center gap-4">
-                            <div>
-                                <h1 className="text-xl font-black tracking-tighter uppercase flex items-center gap-2">
-                                    PixelFlow <span className="text-blue-500">Studio</span>
-                                    <span className="bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/20 ml-2">v2.0 PRO</span>
-                                </h1>
-                                <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.2em] mt-0.5">Digital Signage Control Center</p>
-                            </div>
+        <div className="flex-1 flex flex-col min-h-0 font-sans bg-background text-foreground relative">
 
-                            <div className="h-10 w-[1px] bg-white/5 mx-2" />
-
-                            <div className="flex flex-col">
-                                <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                                    <LayoutIcon className="w-3 h-3 text-blue-500" /> Diseño Activo
-                                </label>
-                                <div className="relative group/lay">
-                                    <select
-                                        className="bg-[#111] border border-white/5 rounded-xl px-4 py-2.5 text-[11px] font-black italic text-blue-400 outline-none focus:border-blue-500/50 min-w-[200px] appearance-none pr-10 cursor-pointer hover:bg-[#1a1a1a] transition-all shadow-2xl hover:border-white/10"
-                                        value={savedLayouts.find(l => l.name === layoutName)?._id || ''}
-                                        onChange={(e) => {
-                                            const layout = savedLayouts.find(l => l._id === e.target.value);
-                                            if (layout) loadLayout(layout);
-                                        }}
-                                    >
-                                        <option value="" className="bg-[#0a0a0a]">Seleccionar Diseño...</option>
-                                        {savedLayouts.map(l => (
-                                            <option key={l._id} value={l._id} className="bg-[#0a0a0a] text-white py-2">{l.name.toUpperCase()}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-hover/lay:text-blue-500 transition-colors pointer-events-none" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                    {/* Monitor Selector Dropdown */}
-                    <div className="flex flex-col">
-                        <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                            <Smartphone className="w-3 h-3 text-blue-500" /> Monitor de Destino
-                        </label>
-                        <div className="flex items-center gap-2">
-                            <div className="relative group/mon">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <div className={`w-1.5 h-1.5 rounded-full ${screens.find(s => s.screenId === screenId) && (Date.now() - new Date(screens.find(s => s.screenId === screenId).lastSeen).getTime() < 15000) ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-red-500'}`} />
-                                </div>
-                                <select
-                                    className="bg-[#111] border border-white/5 rounded-xl pl-9 pr-10 py-2.5 text-[11px] font-black italic text-blue-400 outline-none focus:border-blue-500/50 min-w-[240px] appearance-none cursor-pointer hover:bg-[#1a1a1a] transition-all shadow-2xl hover:border-white/10"
-                                    value={screenId}
-                                    onChange={(e) => setScreenId(e.target.value)}
-                                >
-                                    {screens.length === 0 ? (
-                                        <option value="pantalla-1" className="bg-[#0a0a0a]">Configurando pantallas...</option>
-                                    ) : (
-                                        screens.map(s => {
-                                            const isOnline = Date.now() - new Date(s.lastSeen).getTime() < 15000;
-                                            return (
-                                                <option key={s.screenId} value={s.screenId} className="bg-[#0a0a0a] text-white py-2">
-                                                    {isOnline ? '●' : '○'} {s.name || s.screenId.toUpperCase()} {s.screenId === screenId ? ' (TARGET)' : ''}
-                                                </option>
-                                            );
-                                        })
-                                    )}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-hover/mon:text-blue-500 transition-colors pointer-events-none" />
-                            </div>
-
-                            <button
-                                onClick={() => {
-                                    const url = `${window.location.origin}/player/${screenId}`;
-                                    navigator.clipboard.writeText(url);
-                                    const btn = document.getElementById('copy-url-btn');
-                                    if (btn) {
-                                        btn.innerHTML = '<span class="text-emerald-500 text-[10px] font-black italic">COPIADO!</span>';
-                                        setTimeout(() => {
-                                            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link w-4 h-4"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>';
-                                        }, 2000);
-                                    }
-                                }}
-                                id="copy-url-btn"
-                                className="w-10 h-10 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/30 rounded-xl flex items-center justify-center text-neutral-500 hover:text-blue-500 transition-all active:scale-90 shadow-lg"
-                                title="Copiar URL del Monitor"
-                            >
-                                <LinkIcon className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="h-8 w-[1px] bg-white/10" />
-
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={pushOnly}
-                            className="bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white text-[11px] font-black uppercase px-5 py-3 rounded-md transition-all flex items-center gap-2 border border-white/5"
-                        >
-                            <Eye className="w-4 h-4" /> Preview
-                        </button>
-
-                        <button
-                            onClick={saveAndPush}
-                            className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black uppercase px-8 py-3 rounded-md flex items-center gap-2 transition-all active:scale-95 shadow-xl shadow-blue-600/30 hover:shadow-blue-600/40"
-                        >
-                            <Zap className="w-4 h-4" /> {editingLayoutId ? 'Actualizar' : 'Publicar'}
-                        </button>
-
-                        {editingLayoutId && (
-                            <button
-                                onClick={() => saveLayout(true)}
-                                className="bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white text-[11px] font-black uppercase px-5 py-3 rounded-md transition-all flex items-center gap-2 border border-white/5"
-                            >
-                                <Plus className="w-4 h-4" /> Guardar Nuevo
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </header>
 
             <div className="flex flex-1 overflow-hidden">
-                {/* Widgets Sidebar */}
-                <motion.aside
-                    initial={false}
-                    animate={{
-                        width: leftSidebarOpen ? 300 : 0,
-                        opacity: leftSidebarOpen ? 1 : 0
+                {/* Widgets — top horizontal pill */}
+                <WidgetPalette onAdd={addWidget} variant="horizontal" />
+
+                {/* All controls — right vertical dock */}
+                <FloatingRightDock
+                    orientation={orientation}
+                    onOrientationChange={(o) => {
+                        setOrientation(o);
+                        setResolution((r) => {
+                            const isPortraitVal = r.height > r.width;
+                            const wantPortrait = o === 'portrait';
+                            if (isPortraitVal === wantPortrait) return r;
+                            return { width: r.height, height: r.width };
+                        });
                     }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                    className="bg-[#080808] border-r border-white/5 flex flex-col overflow-hidden relative group/sidebar"
-                >
-                    {/* Toggle Button Left */}
-                    <button
-                        onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-                        className={`absolute top-1/2 -right-4 -translate-y-1/2 z-[60] w-8 h-16 bg-[#080808] border border-white/10 rounded-r-xl flex items-center justify-center text-neutral-500 hover:text-blue-500 transition-all shadow-2xl opacity-0 group-hover/sidebar:opacity-100 ${!leftSidebarOpen ? 'opacity-100 !-right-10 rounded-l-none' : ''}`}
-                    >
-                        {leftSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-                    </button>
-
-                    <div className="flex-1 overflow-y-auto px-6 pt-8 pb-10 space-y-10 custom-scrollbar min-w-[300px]">
-                        <div className="space-y-6">
-                            <div className="sticky top-0 z-20 bg-[#080808] pb-6">
-                                <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em] flex items-center gap-2">
-                                    <Sparkles className="w-3 h-3" /> Biblioteca de Componentes
-                                </h2>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4 pb-20">
-                                {[
-                                    { type: 'TEXT', label: 'Texto Dinámico', desc: 'Títulos y párrafos.', color: 'from-blue-500 to-indigo-600', icon: 'T' },
-                                    { type: 'VIDEO', label: 'Video', desc: 'Fondos animados.', color: 'from-red-500 to-orange-600', icon: 'V' },
-                                    { type: 'SLIDER', label: 'Galería', desc: 'Carrusel fotos/videos.', color: 'from-emerald-500 to-teal-600', icon: 'S' },
-                                    { type: 'PRODUCT_LIST', label: 'Carta', desc: 'Menú productos.', color: 'from-amber-500 to-yellow-600', icon: 'P' },
-                                    { type: 'ACTIVITIES', label: 'Agenda', desc: 'Eventos del día.', color: 'from-purple-500 to-pink-600', icon: 'A' },
-                                    { type: 'DATE_TIME', label: 'Fecha/Hora', desc: 'Reloj digital.', color: 'from-emerald-400 to-cyan-500', icon: <Clock className="w-4 h-4" /> },
-                                    { type: 'QR_CODE', label: 'QR', desc: 'Enlace escaneable.', color: 'from-neutral-500 to-neutral-700', icon: 'Q' },
-                                    { type: 'CATEGORY_NAV', label: 'Menú Táctil', desc: 'Navegación principal.', color: 'from-blue-400 to-cyan-500', icon: 'M' },
-                                    { type: 'WEATHER', label: 'Clima Vivo', desc: 'Pronóstico en tiempo real.', color: 'from-sky-400 to-blue-600', icon: 'W' },
-                                    { type: 'NAV_BUTTON', label: 'Botón', desc: 'Volver/Link.', color: 'from-pink-500 to-rose-600', icon: 'N' },
-                                    { type: 'TICKER', label: 'Ticker', desc: 'Cinta de noticias.', color: 'from-blue-600 to-blue-800', icon: <Megaphone className="w-4 h-4" /> },
-                                    { type: 'SOCIAL_FEED', label: 'Social Feed', desc: 'Reseñas e Instagram.', color: 'from-pink-600 to-purple-700', icon: <Instagram className="w-4 h-4" /> },
-                                    { type: 'COUNTDOWN', label: 'Countdown', desc: 'Reloj regresivo.', color: 'from-orange-500 to-red-600', icon: <Clock className="w-4 h-4" /> },
-                                    { type: 'FLIGHT_BOARD', label: 'Vuelos', desc: 'Salidas/Llegadas.', color: 'from-indigo-600 to-blue-900', icon: <PlaneTakeoff className="w-4 h-4" /> },
-                                    { type: 'MUSIC_PLAYER', label: 'Música', desc: 'Player visualizer.', color: 'from-emerald-500 to-green-700', icon: <Music className="w-4 h-4" /> },
-                                ].map((item: any) => (
-                                    <button
-                                        key={item.type}
-                                        onClick={() => addWidget(item.type)}
-                                        className="group relative flex items-center gap-3 bg-[#111] hover:bg-white/[0.03] border border-white/5 hover:border-blue-500/30 p-2.5 rounded-lg transition-all overflow-hidden"
-                                    >
-                                        <div className={`w-10 h-10 rounded-md bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500 shrink-0`}>
-                                            <span className="text-lg font-black text-white italic">{typeof item.icon === 'string' ? item.icon : item.icon}</span>
-                                        </div>
-                                        <div className="flex flex-col items-start">
-                                            <span className="text-[12px] font-black uppercase tracking-tight text-white italic">
-                                                {item.label}
-                                            </span>
-                                            <span className="text-[9px] text-neutral-600 font-bold uppercase tracking-widest mt-0.5 leading-none">
-                                                {item.desc}
-                                            </span>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </motion.aside>
+                    resolution={resolution}
+                    onResolutionChange={(r) => {
+                        setResolution(r);
+                        setOrientation(r.height > r.width ? 'portrait' : 'landscape');
+                    }}
+                    selectedWidgetCount={selectedWidgetId ? 1 : 0}
+                    totalWidgets={widgets.length}
+                    onOpenProperties={() => setRightSidebarOpen(true)}
+                    layouts={savedLayouts}
+                    activeLayoutId={savedLayouts.find(l => l.name === layoutName)?._id || ''}
+                    onLayoutChange={(id) => { const l = savedLayouts.find(x => x._id === id); if (l) loadLayout(l); }}
+                    layoutName={layoutName}
+                    screens={screens}
+                    screenId={screenId}
+                    onScreenChange={setScreenId}
+                    onPreview={pushOnly}
+                    onPublish={saveAndPush}
+                    onCopyUrl={async () => {
+                        if (!screenId) { toast.error('Seleccioná un monitor primero.'); return; }
+                        const url = window.location.origin + '/player/' + screenId;
+                        const ok = await copyToClipboard(url);
+                        if (ok) toast.success('URL copiada', { description: url });
+                        else toast.error('No se pudo copiar', { description: url });
+                    }}
+                    onUndo={undo}
+                    onRedo={redo}
+                    isEditing={!!editingLayoutId}
+                />
 
                 {/* Main Workspace (Canvas Area) */}
                 {/* Main Workspace (Canvas Area) */}
-                <main className="flex-1 bg-[#0a0a0a] p-12 overflow-hidden relative">
-                    {/* Background Texture */}
-                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
-
-                    <div className="h-full flex flex-col gap-8 max-w-[1400px] mx-auto relative z-10">
-                        {/* Status/Control Bar */}
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-blue-600/10 rounded-lg">
-                                    <Palette className="w-5 h-5 text-blue-500" />
-                                </div>
-                                <input
-                                    value={layoutName}
-                                    onChange={(e) => setLayoutName(e.target.value)}
-                                    className="bg-transparent border-none text-2xl font-black text-white focus:ring-0 p-0 w-[400px] placeholder:text-neutral-800 italic uppercase tracking-tighter"
-                                    placeholder="NOMBRE DEL DISEÑO..."
-                                />
-                            </div>
-
-                            <div className="flex bg-[#111] p-1.5 rounded-lg border border-white/5">
-                                <button
-                                    onClick={() => setOrientation('landscape')}
-                                    className={`px-6 py-2 rounded-md text-[10px] font-black uppercase transition-all flex items-center gap-2 ${orientation === 'landscape' ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-neutral-500 hover:text-neutral-300'}`}
-                                >
-                                    <Monitor className="w-4 h-4" /> Landscape
-                                </button>
-                                <button
-                                    onClick={() => setOrientation('portrait')}
-                                    className={`px-6 py-2 rounded-md text-[10px] font-black uppercase transition-all flex items-center gap-2 ${orientation === 'portrait' ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-neutral-500 hover:text-neutral-300'}`}
-                                >
-                                    <Smartphone className="w-4 h-4" /> Portrait
-                                </button>
-                            </div>
-                            <div className="bg-[#111] px-4 py-2 rounded-lg border border-white/5 flex items-center gap-2">
-                                <div className="flex flex-col items-end">
-                                    <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Resolución</span>
-                                    <span className="text-[10px] font-mono font-bold text-blue-400">
-                                        {orientation === 'landscape' ? '1920 x 1080' : '1080 x 1920'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Interactive Canvas */}
-                        <div className="flex-1 min-h-0 bg-[#050505] rounded-xl border border-white/5 shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-auto p-6 relative group custom-scrollbar">
+                <main className="flex-1 bg-background overflow-hidden relative">
+                    <div className="h-full flex flex-col w-full relative">
+                        {/* Interactive Canvas — full bleed */}
+                        <div
+                            ref={canvasContainerRef}
+                            className="flex-1 min-h-0 bg-muted/30 overflow-auto relative group custom-scrollbar pt-16 pb-12"
+                            onContextMenu={(e) => {
+                                if (!selectedWidgetId) return;
+                                e.preventDefault();
+                                setCtxMenu({ x: e.clientX, y: e.clientY, visible: true });
+                            }}
+                            onClick={(e) => { if ((e.target as HTMLElement).closest('[data-ctx-menu]') == null) setCtxMenu((m) => m.visible ? { ...m, visible: false } : m); }}
+                        >
                             <Canvas
                                 orientation={orientation}
                                 widgets={widgets}
-                                onWidgetsChange={setWidgets}
+                                onWidgetsChange={setWidgetsWithHistory}
+                                onCommit={commitHistory}
+                                onAddWidget={addWidget}
                                 selectedId={selectedWidgetId}
                                 onSelect={setSelectedWidgetId}
+                                onOpenProperties={() => setRightSidebarOpen(true)}
                                 backgroundImage={backgroundImage}
                                 backgroundVideo={backgroundVideo}
                                 backgroundColor={backgroundColor}
@@ -638,76 +614,171 @@ export default function AdminDashboard() {
                             {/* Visual Hint */}
                             {!selectedWidgetId && widgets.length > 0 && (
                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-3">
-                                    <MousePointer2 className="w-10 h-10 text-blue-500 animate-bounce" />
-                                    <span className="text-[10px] font-black text-blue-500/50 uppercase tracking-[0.4em]">Haz click en un elemento para editarlo</span>
+                                    <MousePointer2 className="w-10 h-10 text-primary animate-bounce" />
+                                    <span className="text-[10px] font-bold text-primary/60 uppercase tracking-[0.3em]">Haz click en un elemento para editarlo</span>
                                 </div>
                             )}
                         </div>
+
+                        {!rightSidebarOpen && (
+                            <FloatingToolbar
+                                widget={widgets.find((w) => w.id === selectedWidgetId) || null}
+                                canvasRef={canvasContainerRef}
+                                onDuplicate={duplicateSelected}
+                                onDelete={deleteSelected}
+                                onBringForward={bringForward}
+                                onSendBackward={sendBackward}
+                                onAlign={alignToCanvas}
+                            />
+                        )}
+
+                        <StatusBar
+                            selected={widgets.find((w) => w.id === selectedWidgetId) || null}
+                            totalWidgets={widgets.length}
+                            gridSize={16}
+                        />
                     </div>
+
+                    {/* Right-click context menu */}
+                    {ctxMenu.visible && selectedWidgetId && (
+                        <div
+                            data-ctx-menu
+                            className="fixed z-50 min-w-[200px] rounded-md border bg-popover text-popover-foreground shadow-xl backdrop-blur-xl py-1"
+                            style={{ left: ctxMenu.x, top: ctxMenu.y, background: 'color-mix(in srgb, var(--popover) 96%, transparent)' }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <button onClick={() => { setRightSidebarOpen(true); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent flex items-center gap-2">
+                                <Settings2 className="size-3.5" /> Propiedades
+                            </button>
+                            <div className="h-px bg-border my-1" />
+                            <button onClick={() => { alignToCanvas('left'); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Alinear izquierda</button>
+                            <button onClick={() => { alignToCanvas('center-h'); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Centrar horizontal</button>
+                            <button onClick={() => { alignToCanvas('right'); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Alinear derecha</button>
+                            <button onClick={() => { alignToCanvas('top'); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Alinear arriba</button>
+                            <button onClick={() => { alignToCanvas('center-v'); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Centrar vertical</button>
+                            <button onClick={() => { alignToCanvas('bottom'); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Alinear abajo</button>
+                            <div className="h-px bg-border my-1" />
+                            <button onClick={() => { bringForward(); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Traer al frente</button>
+                            <button onClick={() => { sendBackward(); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Enviar al fondo</button>
+                            <div className="h-px bg-border my-1" />
+                            <button onClick={() => { duplicateSelected(); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent">Duplicar</button>
+                            <button onClick={() => { deleteSelected(); setCtxMenu({ ...ctxMenu, visible: false }); }} className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-accent text-destructive">Eliminar</button>
+                        </div>
+                    )}
                 </main>
 
-                {/* Properties Inspector Panel */}
-                <motion.aside
-                    initial={false}
-                    animate={{
-                        width: rightSidebarOpen ? 400 : 0,
-                        opacity: rightSidebarOpen ? 1 : 0
-                    }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                    className="bg-[#080808] border-l border-white/5 flex flex-col overflow-hidden relative group/rightsidebar"
+                {/* Properties Inspector — modal Dialog */}
+                <AnimatePresence>{rightSidebarOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="fixed inset-0 z-[80] grid place-items-center p-6 bg-foreground/50 dark:bg-background/85 backdrop-blur-md"
+                    onClick={(e) => { if (e.target === e.currentTarget) setRightSidebarOpen(false); }}
                 >
-                    {/* Toggle Button Right */}
-                    <button
-                        onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-                        className={`absolute top-1/2 -left-4 -translate-y-1/2 z-[60] w-8 h-16 bg-[#080808] border border-white/10 rounded-l-xl flex items-center justify-center text-neutral-500 hover:text-blue-500 transition-all shadow-2xl opacity-0 group-hover/rightsidebar:opacity-100 ${!rightSidebarOpen ? 'opacity-100 !-left-10 rounded-r-none' : ''}`}
-                    >
-                        {rightSidebarOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-                    </button>
+                <motion.aside
+                    initial={{ scale: 0.96, opacity: 0, y: 12 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.96, opacity: 0, y: 12 }}
+                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    className="w-full max-w-3xl max-h-[88vh] bg-card border text-card-foreground rounded-xl shadow-2xl flex flex-col overflow-hidden"
+                >
+                    <div className="h-14 px-5 flex items-center justify-between border-b bg-card/50">
+                        <div className="flex items-center gap-2.5">
+                            <span className="size-8 rounded-md grid place-items-center bg-primary/10 text-primary shrink-0">
+                                <Settings2 className="size-4" strokeWidth={1.75} />
+                            </span>
+                            <div>
+                                <h2 className="font-heading text-[14px] font-bold tracking-tight leading-none">
+                                    {selectedWidget ? 'Propiedades del widget' : 'Lienzo Maestro'}
+                                </h2>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    {selectedWidget
+                                        ? selectedWidget.type
+                                        : widgets.length + ' capas activas · ' + resolution.width + 'x' + resolution.height}
+                                </p>
+                            </div>
+                        </div>
+                        <button onClick={() => setRightSidebarOpen(false)} className="size-7 grid place-items-center rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                            <X className="size-4" />
+                        </button>
+                    </div>
 
                     <div className="flex-1 min-w-[400px] flex flex-col h-full overflow-hidden">
                         {
                             selectedWidget ? (
                                 <div className="flex-1 flex flex-col h-full overflow-hidden" >
-                                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                        <div className="p-8 border-b border-white/5 bg-gradient-to-br from-blue-600/5 to-transparent">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <span className="bg-blue-500 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
-                                                    {selectedWidget.type === 'CATEGORY_NAV' ? 'MENÚ TÁCTIL' :
-                                                        selectedWidget.type === 'NAV_BUTTON' ? 'BOTÓN NAVEGACIÓN' :
-                                                            selectedWidget.type === 'PRODUCT_LIST' ? 'LISTA PRODUCTOS' :
-                                                                selectedWidget.type}
-                                                </span>
-                                                <button onClick={() => setSelectedWidgetId(null)} className="text-neutral-600 hover:text-white transition-colors">
-                                                    <RefreshCw className="w-4 h-4" />
-                                                </button>
+                                    <div className="flex-1 overflow-y-auto">
+                                        <div className="px-5 py-4 border-b bg-card/50">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-wider">
+                                                        {selectedWidget.type === 'CATEGORY_NAV' ? 'Menu tactil' :
+                                                            selectedWidget.type === 'NAV_BUTTON' ? 'Boton' :
+                                                                selectedWidget.type === 'PRODUCT_LIST' ? 'Productos' :
+                                                                    selectedWidget.type}
+                                                    </Badge>
+                                                    <span className="text-[11px] text-muted-foreground font-mono">
+                                                        z:{selectedWidget.zIndex || 1}
+                                                    </span>
+                                                </div>
+                                                <Button size="sm" variant="ghost" onClick={() => setSelectedWidgetId(null)} className="h-7 text-[11px]">
+                                                    Deseleccionar
+                                                </Button>
                                             </div>
-                                            <h3 className="text-xl font-black uppercase tracking-tighter text-white">Editar Propiedades</h3>
                                         </div>
 
-                                        <section className="p-8 space-y-8">
-                                            <div className="space-y-4">
-                                                <h4 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
-                                                    <Maximize className="w-3 h-3 text-blue-500" /> Geometría
+                                        <section className="p-5 space-y-5">
+                                            <div className="rounded-lg border bg-card p-4 space-y-3">
+                                                <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                                                    <Maximize className="size-3" /> Geometria
                                                 </h4>
-                                                <div className="grid grid-cols-2 gap-4">
+                                                <div className="grid grid-cols-4 gap-2">
                                                     <div>
-                                                        <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2">Ancho (%)</label>
-                                                        <input type="number" value={selectedWidget.w || 0} onChange={(e) => updateSelectedWidgetSize('w', parseInt(e.target.value) || 0)} className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-xs font-black text-white outline-none focus:border-blue-500/50" />
+                                                        <Label className="text-[10px] text-muted-foreground mb-1 block">X (%)</Label>
+                                                        <Input type="number" value={Math.round(selectedWidget.x || 0)} onChange={(e) => updateSelectedWidgetPos('x', parseInt(e.target.value) || 0)} className="h-8 text-[12px] font-mono" />
                                                     </div>
                                                     <div>
-                                                        <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2">Alto (%)</label>
-                                                        <input type="number" value={selectedWidget.h || 0} onChange={(e) => updateSelectedWidgetSize('h', parseInt(e.target.value) || 0)} className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-xs font-black text-white outline-none focus:border-blue-500/50" />
+                                                        <Label className="text-[10px] text-muted-foreground mb-1 block">Y (%)</Label>
+                                                        <Input type="number" value={Math.round(selectedWidget.y || 0)} onChange={(e) => updateSelectedWidgetPos('y', parseInt(e.target.value) || 0)} className="h-8 text-[12px] font-mono" />
+                                                    </div>
+                                                    <div>
+                                                        <Label className="text-[10px] text-muted-foreground mb-1 block">W (%)</Label>
+                                                        <Input type="number" value={Math.round(selectedWidget.w || 0)} onChange={(e) => updateSelectedWidgetSize('w', parseInt(e.target.value) || 0)} className="h-8 text-[12px] font-mono" />
+                                                    </div>
+                                                    <div>
+                                                        <Label className="text-[10px] text-muted-foreground mb-1 block">H (%)</Label>
+                                                        <Input type="number" value={Math.round(selectedWidget.h || 0)} onChange={(e) => updateSelectedWidgetSize('h', parseInt(e.target.value) || 0)} className="h-8 text-[12px] font-mono" />
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between pt-2 border-t">
+                                                    <Label className="text-[10px] text-muted-foreground">Capa (z-index)</Label>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => bringToFrontWidget(selectedWidget.id)} title="Al frente">
+                                                            <ChevronsUp className="size-3.5" />
+                                                        </Button>
+                                                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => moveLayerUp(selectedWidget.id)} title="Subir">
+                                                            <ArrowUp className="size-3.5" />
+                                                        </Button>
+                                                        <span className="font-mono text-[11px] w-7 text-center tabular-nums">{selectedWidget.zIndex || 1}</span>
+                                                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => moveLayerDown(selectedWidget.id)} title="Bajar">
+                                                            <ArrowDown className="size-3.5" />
+                                                        </Button>
+                                                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => sendToBackWidget(selectedWidget.id)} title="Al fondo">
+                                                            <ChevronsDown className="size-3.5" />
+                                                        </Button>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-6 pt-6 border-t border-white/5">
+                                            <div className="space-y-5">
                                                 {selectedWidget.type === 'TEXT' && (
                                                     <div className="space-y-6">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2">Estilo de Texto</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2">Estilo de Texto</label>
                                                             <select
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-xs font-black text-white outline-none focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-3 text-xs font-black text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                 value={selectedWidget.data.style || 'minimal'}
                                                                 onChange={(e) => updateSelectedWidgetData({ style: e.target.value })}
                                                             >
@@ -721,11 +792,11 @@ export default function AdminDashboard() {
                                                         {selectedWidget.data.style === 'gradient' && (
                                                             <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-500">
                                                                 <div>
-                                                                    <label className="text-[8px] font-black text-neutral-600 uppercase block mb-1">Color Inicio</label>
+                                                                    <label className="text-[8px] font-black text-muted-foreground uppercase block mb-1">Color Inicio</label>
                                                                     <input type="color" value={selectedWidget.data.gradientFrom || '#3b82f6'} onChange={(e) => updateSelectedWidgetData({ gradientFrom: e.target.value })} className="w-full h-8 bg-transparent cursor-pointer" />
                                                                 </div>
                                                                 <div>
-                                                                    <label className="text-[8px] font-black text-neutral-600 uppercase block mb-1">Color Fin</label>
+                                                                    <label className="text-[8px] font-black text-muted-foreground uppercase block mb-1">Color Fin</label>
                                                                     <input type="color" value={selectedWidget.data.gradientTo || '#8b5cf6'} onChange={(e) => updateSelectedWidgetData({ gradientTo: e.target.value })} className="w-full h-8 bg-transparent cursor-pointer" />
                                                                 </div>
                                                             </div>
@@ -733,12 +804,12 @@ export default function AdminDashboard() {
 
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div>
-                                                                <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2">Tamaño Fuente</label>
-                                                                <input type="text" value={selectedWidget.data.fontSize || '2rem'} onChange={(e) => updateSelectedWidgetData({ fontSize: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-xs font-black text-white outline-none" />
+                                                                <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2">Tamaño Fuente</label>
+                                                                <input type="text" value={selectedWidget.data.fontSize || '2rem'} onChange={(e) => updateSelectedWidgetData({ fontSize: e.target.value })} className="w-full bg-muted border border-border rounded-md p-3 text-xs font-black text-foreground outline-none" />
                                                             </div>
                                                             <div>
-                                                                <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2">Alineación</label>
-                                                                <select value={selectedWidget.data.textAlign || 'center'} onChange={(e) => updateSelectedWidgetData({ textAlign: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-xs font-black text-white outline-none">
+                                                                <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2">Alineación</label>
+                                                                <select value={selectedWidget.data.textAlign || 'center'} onChange={(e) => updateSelectedWidgetData({ textAlign: e.target.value })} className="w-full bg-muted border border-border rounded-md p-3 text-xs font-black text-foreground outline-none">
                                                                     <option value="left">Izquierda</option>
                                                                     <option value="center">Centro</option>
                                                                     <option value="right">Derecha</option>
@@ -752,8 +823,8 @@ export default function AdminDashboard() {
 
                                                 {selectedWidget.type === 'VIDEO' && (
                                                     <div className="space-y-4">
-                                                        <label className="text-[9px] text-neutral-600 uppercase block font-black">URL Video</label>
-                                                        <input value={selectedWidget.data.url} onChange={(e) => updateSelectedWidgetData({ url: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-bold text-blue-400 outline-none" placeholder="https://..." />
+                                                        <label className="text-[9px] text-muted-foreground uppercase block font-black">URL Video</label>
+                                                        <input value={selectedWidget.data.url} onChange={(e) => updateSelectedWidgetData({ url: e.target.value })} className="w-full bg-muted border border-border rounded-md p-4 text-xs font-bold text-primary outline-none" placeholder="https://..." />
                                                         <ImageUpload label="Subir Video" onUploadSuccess={(url) => updateSelectedWidgetData({ url })} />
                                                     </div>
                                                 )}
@@ -761,17 +832,17 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'SLIDER' && (
                                                     <div className="space-y-6">
                                                         <div className="flex justify-between items-center mb-2">
-                                                            <label className="text-[9px] text-neutral-600 uppercase font-black">Items del Slider</label>
-                                                            <span className="text-[9px] font-black text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full">{selectedWidget.data.images?.length || 0} TOTAL</span>
+                                                            <label className="text-[9px] text-muted-foreground uppercase font-black">Items del Slider</label>
+                                                            <span className="text-[9px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full">{selectedWidget.data.images?.length || 0} TOTAL</span>
                                                         </div>
                                                         <div className="grid grid-cols-4 gap-3">
                                                             {selectedWidget.data.images?.map((url: string, idx: number) => (
                                                                 <div key={idx} className="relative aspect-square group/img">
-                                                                    <img src={url} className="w-full h-full object-cover rounded-md border border-white/10" />
-                                                                    <button onClick={() => { const n = selectedWidget.data.images.filter((_: any, i: number) => i !== idx); updateSelectedWidgetData({ images: n }); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover/img:opacity-100 shadow-lg"><Trash2 className="w-2 h-2" /></button>
+                                                                    <img src={url} className="w-full h-full object-cover rounded-md border border-border" />
+                                                                    <button onClick={() => { const n = selectedWidget.data.images.filter((_: any, i: number) => i !== idx); updateSelectedWidgetData({ images: n }); }} className="absolute -top-1 -right-1 bg-destructive text-foreground rounded-full p-1 opacity-0 group-hover/img:opacity-100 shadow-lg"><Trash2 className="w-2 h-2" /></button>
                                                                 </div>
                                                             ))}
-                                                            <button onClick={() => { const u = prompt('URL:'); if (u) updateSelectedWidgetData({ images: [...(selectedWidget.data.images || []), u] }); }} className="aspect-square bg-[#111] border border-dashed border-white/10 rounded-md flex items-center justify-center hover:bg-white/5"><Plus className="w-4 h-4 text-neutral-600" /></button>
+                                                            <button onClick={() => { const u = prompt('URL:'); if (u) updateSelectedWidgetData({ images: [...(selectedWidget.data.images || []), u] }); }} className="aspect-square bg-muted border border-dashed border-border rounded-md flex items-center justify-center hover:bg-white/5"><Plus className="w-4 h-4 text-muted-foreground" /></button>
                                                         </div>
                                                         <ImageUpload label="Subir Imagen/Video" onUploadSuccess={(url) => updateSelectedWidgetData({ images: [...(selectedWidget.data.images || []), url] })} />
                                                     </div>
@@ -779,21 +850,21 @@ export default function AdminDashboard() {
 
                                                 {selectedWidget.type === 'QR_CODE' && (
                                                     <div className="space-y-6">
-                                                        <input className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white" value={selectedWidget.data.title} onChange={(e) => updateSelectedWidgetData({ title: e.target.value })} placeholder="TÍTULO QR" />
-                                                        <input className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-blue-400" value={selectedWidget.data.url} onChange={(e) => updateSelectedWidgetData({ url: e.target.value })} placeholder="URL DESTINO" />
+                                                        <input className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-foreground" value={selectedWidget.data.title} onChange={(e) => updateSelectedWidgetData({ title: e.target.value })} placeholder="TÍTULO QR" />
+                                                        <input className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-primary" value={selectedWidget.data.url} onChange={(e) => updateSelectedWidgetData({ url: e.target.value })} placeholder="URL DESTINO" />
                                                         <div className="grid grid-cols-2 gap-4">
-                                                            <div><label className="text-[8px] font-black text-neutral-600 uppercase block mb-2">QR</label><input type="color" value={selectedWidget.data.qrColor} onChange={(e) => updateSelectedWidgetData({ qrColor: e.target.value })} className="w-full h-10 bg-transparent cursor-pointer" /></div>
-                                                            <div><label className="text-[8px] font-black text-neutral-600 uppercase block mb-2">FONDO</label><input type="color" value={selectedWidget.data.bgColor} onChange={(e) => updateSelectedWidgetData({ bgColor: e.target.value })} className="w-full h-10 bg-transparent cursor-pointer" /></div>
+                                                            <div><label className="text-[8px] font-black text-muted-foreground uppercase block mb-2">QR</label><input type="color" value={selectedWidget.data.qrColor} onChange={(e) => updateSelectedWidgetData({ qrColor: e.target.value })} className="w-full h-10 bg-transparent cursor-pointer" /></div>
+                                                            <div><label className="text-[8px] font-black text-muted-foreground uppercase block mb-2">FONDO</label><input type="color" value={selectedWidget.data.bgColor} onChange={(e) => updateSelectedWidgetData({ bgColor: e.target.value })} className="w-full h-10 bg-transparent cursor-pointer" /></div>
                                                         </div>
                                                     </div>
                                                 )}
 
                                                 {selectedWidget.type === 'CATEGORY_NAV' && (
                                                     <div className="space-y-8">
-                                                        <div className="bg-blue-600/5 p-6 rounded-xl border border-blue-500/10 space-y-6">
+                                                        <div className="bg-primary/5 p-6 rounded-xl border border-primary/15 space-y-6">
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex flex-col">
-                                                                    <span className="text-[11px] font-black text-white uppercase italic tracking-widest">Generador de Layouts</span>
+                                                                    <span className="text-[11px] font-black text-foreground uppercase italic tracking-widest">Generador de Layouts</span>
                                                                 </div>
                                                                 <button
                                                                     onClick={() => {
@@ -824,18 +895,18 @@ export default function AdminDashboard() {
                                                                         updateSelectedWidgetData({ categories: newCats });
                                                                         setTimeout(fetchLayouts, 1000);
                                                                     }}
-                                                                    className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-lg transition-all shadow-lg active:scale-95"
+                                                                    className="bg-primary hover:bg-primary text-foreground p-3 rounded-lg transition-all shadow-lg active:scale-95"
                                                                 >
                                                                     <Layers className="w-5 h-5" />
                                                                 </button>
                                                             </div>
 
-                                                            <div className="space-y-4 pt-4 border-t border-white/5">
+                                                            <div className="space-y-4 pt-4 border-t border-border">
                                                                 <div className="grid grid-cols-2 gap-4">
                                                                     <div>
-                                                                        <label className="text-[8px] font-black text-blue-400/60 uppercase tracking-[0.2em] mb-2 block">Estética del Menú</label>
+                                                                        <label className="text-[8px] font-black text-primary/60 uppercase tracking-[0.2em] mb-2 block">Estética del Menú</label>
                                                                         <select
-                                                                            className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px] font-black text-white outline-none focus:border-blue-500/50"
+                                                                            className="w-full bg-muted border border-border rounded-lg p-3 text-[11px] font-black text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                             value={selectedWidget.data.template || 'CARDS'}
                                                                             onChange={(e) => updateSelectedWidgetData({ template: e.target.value })}
                                                                         >
@@ -851,9 +922,9 @@ export default function AdminDashboard() {
                                                                         </select>
                                                                     </div>
                                                                     <div>
-                                                                        <label className="text-[8px] font-black text-blue-400/60 uppercase tracking-[0.2em] mb-2 block">Columnas</label>
+                                                                        <label className="text-[8px] font-black text-primary/60 uppercase tracking-[0.2em] mb-2 block">Columnas</label>
                                                                         <select
-                                                                            className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px] font-black text-white outline-none"
+                                                                            className="w-full bg-muted border border-border rounded-lg p-3 text-[11px] font-black text-foreground outline-none"
                                                                             value={selectedWidget.data.columns || 3}
                                                                             onChange={(e) => updateSelectedWidgetData({ columns: parseInt(e.target.value) })}
                                                                         >
@@ -866,9 +937,9 @@ export default function AdminDashboard() {
                                                                 </div>
 
                                                                 <div>
-                                                                    <label className="text-[8px] font-black text-blue-400/60 uppercase tracking-[0.2em] mb-2 block">Título del Menú</label>
+                                                                    <label className="text-[8px] font-black text-primary/60 uppercase tracking-[0.2em] mb-2 block">Título del Menú</label>
                                                                     <input
-                                                                        className="w-full bg-black/40 border border-white/5 rounded-lg p-4 text-[13px] font-black text-white italic outline-none focus:border-blue-500/50 transition-all font-sans"
+                                                                        className="w-full bg-muted border border-border rounded-lg p-4 text-[13px] font-black text-foreground italic outline-none focus-visible:ring-2 focus-visible:ring-ring/40 transition-all font-sans"
                                                                         value={selectedWidget.data.title || ''}
                                                                         onChange={(e) => updateSelectedWidgetData({ title: e.target.value })}
                                                                         placeholder="NUESTRAS SECCIONES"
@@ -877,9 +948,9 @@ export default function AdminDashboard() {
 
                                                                 <div className="grid grid-cols-2 gap-4">
                                                                     <div>
-                                                                        <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest block mb-2">Diseño de Menú</label>
+                                                                        <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Diseño de Menú</label>
                                                                         <select
-                                                                            className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[10px] font-black text-white/70 outline-none"
+                                                                            className="w-full bg-muted border border-border rounded-lg p-3 text-[10px] font-black text-muted-foreground outline-none"
                                                                             value={selectedWidget.data.layout || 'HORIZONTAL'}
                                                                             onChange={(e) => updateSelectedWidgetData({ layout: e.target.value })}
                                                                         >
@@ -889,9 +960,9 @@ export default function AdminDashboard() {
                                                                     </div>
                                                                     {selectedWidget.data.layout === 'VERTICAL' && (
                                                                         <div>
-                                                                            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest block mb-2">Columnas</label>
+                                                                            <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Columnas</label>
                                                                             <select
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[10px] font-black text-white/70 outline-none"
+                                                                                className="w-full bg-muted border border-border rounded-lg p-3 text-[10px] font-black text-muted-foreground outline-none"
                                                                                 value={selectedWidget.data.columns || 3}
                                                                                 onChange={(e) => updateSelectedWidgetData({ columns: parseInt(e.target.value) })}
                                                                             >
@@ -906,13 +977,13 @@ export default function AdminDashboard() {
                                                                 </div>
 
                                                                 <div>
-                                                                    <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest block mb-2">Estilo de Botones</label>
+                                                                    <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Estilo de Botones</label>
                                                                     <div className="grid grid-cols-3 gap-2">
                                                                         {(['CARDS', 'GLASS', 'MINIMAL'] as const).map(style => (
                                                                             <button
                                                                                 key={style}
                                                                                 onClick={() => updateSelectedWidgetData({ buttonStyle: style })}
-                                                                                className={`py-2 rounded border text-[8px] font-black transition-all ${selectedWidget.data.buttonStyle === style || (!selectedWidget.data.buttonStyle && style === 'CARDS') ? 'bg-blue-600 border-blue-500 text-white' : 'bg-black/40 border-white/5 text-neutral-600'}`}
+                                                                                className={`py-2 rounded border text-[8px] font-black transition-all ${selectedWidget.data.buttonStyle === style || (!selectedWidget.data.buttonStyle && style === 'CARDS') ? 'bg-primary border-blue-500 text-foreground' : 'bg-muted border-border text-muted-foreground'}`}
                                                                             >
                                                                                 {style}
                                                                             </button>
@@ -924,10 +995,10 @@ export default function AdminDashboard() {
 
                                                         <div className="space-y-4">
                                                             <div className="flex justify-between items-center px-2">
-                                                                <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em]">Botones del Menú</h3>
+                                                                <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">Botones del Menú</h3>
                                                                 <button
                                                                     onClick={() => updateSelectedWidgetData({ categories: [...selectedWidget.data.categories, { id: Math.random(), label: 'NUEVA SECCIÓN', icon: 'Utensils', active: false }] })}
-                                                                    className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-lg text-[9px] font-black uppercase transition-all"
+                                                                    className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-foreground rounded-lg text-[9px] font-black uppercase transition-all"
                                                                 >
                                                                     <Plus className="w-3 h-3" /> Añadir
                                                                 </button>
@@ -935,13 +1006,13 @@ export default function AdminDashboard() {
 
                                                             <div className="space-y-4 pr-2 custom-scrollbar max-h-[800px] overflow-y-auto">
                                                                 {selectedWidget.data.categories?.map((cat: any, idx: number) => (
-                                                                    <div key={cat.id} className="bg-[#111] p-6 rounded-xl border border-white/5 space-y-5 group relative overflow-hidden">
-                                                                        <div className={`absolute top-0 right-0 w-32 h-32 bg-blue-600/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none`} />
+                                                                    <div key={cat.id} className="bg-muted p-6 rounded-xl border border-border space-y-5 group relative overflow-hidden">
+                                                                        <div className={`absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none`} />
 
                                                                         <div className="flex gap-5 relative z-10">
-                                                                            <div className="w-20 h-20 rounded-lg bg-black border border-white/10 overflow-hidden flex-shrink-0 relative group/photo shadow-2xl">
+                                                                            <div className="w-20 h-20 rounded-lg bg-black border border-border overflow-hidden flex-shrink-0 relative group/photo shadow-2xl">
                                                                                 <img src={cat.photo || 'https://via.placeholder.com/100'} className="w-full h-full object-cover transition-transform duration-700 group-hover/photo:scale-110" />
-                                                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center">
+                                                                                <div className="absolute inset-0 bg-muted opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center">
                                                                                     <ImageUpload
                                                                                         compact
                                                                                         onUploadSuccess={(url) => {
@@ -955,9 +1026,9 @@ export default function AdminDashboard() {
 
                                                                             <div className="flex-1 space-y-4">
                                                                                 <div>
-                                                                                    <label className="text-[8px] font-black text-neutral-600 uppercase tracking-widest block mb-1">Nombre Visual</label>
+                                                                                    <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Nombre Visual</label>
                                                                                     <input
-                                                                                        className="w-full bg-black/40 border border-white/10 rounded-md px-4 py-2.5 text-xs font-black italic outline-none text-white focus:border-blue-500/50 transition-colors"
+                                                                                        className="w-full bg-muted border border-border rounded-md px-4 py-2.5 text-xs font-black italic outline-none text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 transition-colors"
                                                                                         value={cat.label}
                                                                                         onChange={(e) => {
                                                                                             const newCats = [...selectedWidget.data.categories];
@@ -970,8 +1041,8 @@ export default function AdminDashboard() {
 
 
                                                                                 <div>
-                                                                                    <label className="text-[8px] font-black text-neutral-600 uppercase tracking-widest block mb-1">Color Fondo</label>
-                                                                                    <div className="flex items-center gap-3 bg-black/40 border border-white/10 rounded-md p-2 mb-2">
+                                                                                    <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Color Fondo</label>
+                                                                                    <div className="flex items-center gap-3 bg-muted border border-border rounded-md p-2 mb-2">
                                                                                         <input
                                                                                             type="color"
                                                                                             value={cat.bucketColor || '#111111'}
@@ -982,13 +1053,13 @@ export default function AdminDashboard() {
                                                                                             }}
                                                                                             className="w-8 h-8 rounded cursor-pointer bg-transparent border-none p-0"
                                                                                         />
-                                                                                        <span className="text-[10px] font-mono text-neutral-500 uppercase">{cat.bucketColor || '#111111'}</span>
+                                                                                        <span className="text-[10px] font-mono text-muted-foreground uppercase">{cat.bucketColor || '#111111'}</span>
                                                                                     </div>
                                                                                 </div>
 
                                                                                 <div>
-                                                                                    <label className="text-[8px] font-black text-neutral-600 uppercase tracking-widest block mb-1">Overlay</label>
-                                                                                    <div className="flex items-center gap-3 bg-black/40 border border-white/10 rounded-md p-2 mb-2">
+                                                                                    <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Overlay</label>
+                                                                                    <div className="flex items-center gap-3 bg-muted border border-border rounded-md p-2 mb-2">
                                                                                         <input
                                                                                             type="color"
                                                                                             value={cat.overlayColor || '#000000'}
@@ -999,10 +1070,10 @@ export default function AdminDashboard() {
                                                                                             }}
                                                                                             className="w-8 h-8 rounded cursor-pointer bg-transparent border-none p-0"
                                                                                         />
-                                                                                        <span className="text-[10px] font-mono text-neutral-500 uppercase flex-1">{cat.overlayColor || '#000000'}</span>
+                                                                                        <span className="text-[10px] font-mono text-muted-foreground uppercase flex-1">{cat.overlayColor || '#000000'}</span>
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 px-1">
-                                                                                        <span className="text-[8px] text-neutral-600 font-bold">ALPHA</span>
+                                                                                        <span className="text-[8px] text-muted-foreground font-bold">ALPHA</span>
                                                                                         <input
                                                                                             type="range" min="0" max="100"
                                                                                             value={cat.overlayOpacity !== undefined ? cat.overlayOpacity : 30}
@@ -1011,17 +1082,17 @@ export default function AdminDashboard() {
                                                                                                 newCats[idx].overlayOpacity = parseInt(e.target.value);
                                                                                                 updateSelectedWidgetData({ categories: newCats });
                                                                                             }}
-                                                                                            className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500"
+                                                                                            className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
                                                                                         />
-                                                                                        <span className="text-[9px] text-white/50 w-6 text-right tabular-nums">{cat.overlayOpacity !== undefined ? cat.overlayOpacity : 30}%</span>
+                                                                                        <span className="text-[9px] text-muted-foreground w-6 text-right tabular-nums">{cat.overlayOpacity !== undefined ? cat.overlayOpacity : 30}%</span>
                                                                                     </div>
                                                                                 </div>
 
                                                                                 <div className="grid grid-cols-2 gap-3">
                                                                                     <div className="space-y-1">
-                                                                                        <label className="text-[8px] font-black text-neutral-600 uppercase tracking-widest block">Icono</label>
+                                                                                        <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block">Icono</label>
                                                                                         <select
-                                                                                            className="w-full bg-black/40 border border-white/10 rounded-md px-3 py-2 text-[10px] font-black text-white/50 outline-none focus:border-blue-500/50"
+                                                                                            className="w-full bg-muted border border-border rounded-md px-3 py-2 text-[10px] font-black text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                                             value={cat.icon || 'Utensils'}
                                                                                             onChange={(e) => {
                                                                                                 const newCats = [...selectedWidget.data.categories];
@@ -1039,13 +1110,13 @@ export default function AdminDashboard() {
                                                                                         </select>
                                                                                     </div>
                                                                                     <div className="space-y-1">
-                                                                                        <label className="text-[8px] font-black text-neutral-600 uppercase tracking-widest block">Visibilidad</label>
+                                                                                        <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block">Visibilidad</label>
                                                                                         <button
                                                                                             onClick={() => {
                                                                                                 const newCats = selectedWidget.data.categories.map((c: any, i: number) => ({ ...c, active: i === idx }));
                                                                                                 updateSelectedWidgetData({ categories: newCats });
                                                                                             }}
-                                                                                            className={`w-full py-2 rounded-md text-[9px] font-black uppercase transition-all ${cat.active ? 'bg-blue-600 text-white shadow-lg' : 'bg-neutral-800 text-neutral-500 hover:text-white'}`}
+                                                                                            className={`w-full py-2 rounded-md text-[9px] font-black uppercase transition-all ${cat.active ? 'bg-primary text-foreground shadow-lg' : 'bg-neutral-800 text-muted-foreground hover:text-foreground'}`}
                                                                                         >
                                                                                             {cat.active ? 'VISIBLE' : 'OCULTO'}
                                                                                         </button>
@@ -1056,11 +1127,11 @@ export default function AdminDashboard() {
 
 
 
-                                                                        <div className="flex items-center justify-between pt-4 border-t border-white/5 relative z-10">
+                                                                        <div className="flex items-center justify-between pt-4 border-t border-border relative z-10">
                                                                             <div className="flex-1">
-                                                                                <label className="text-[7px] font-black text-neutral-600 uppercase tracking-widest block mb-1 italic">Vincular a Layout</label>
+                                                                                <label className="text-[7px] font-black text-muted-foreground uppercase tracking-widest block mb-1 italic">Vincular a Layout</label>
                                                                                 <select
-                                                                                    className="w-full bg-transparent border-none text-[11px] font-black text-blue-500 outline-none focus:ring-0 p-0"
+                                                                                    className="w-full bg-transparent border-none text-[11px] font-black text-primary outline-none focus:ring-0 p-0"
                                                                                     value={cat.targetLayoutId || ''}
                                                                                     onChange={(e) => {
                                                                                         const newCats = [...selectedWidget.data.categories];
@@ -1079,7 +1150,7 @@ export default function AdminDashboard() {
                                                                                     const newCats = selectedWidget.data.categories.filter((_: any, i: number) => i !== idx);
                                                                                     updateSelectedWidgetData({ categories: newCats });
                                                                                 }}
-                                                                                className="p-3 text-red-500/20 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                                                                className="p-3 text-destructive/20 hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
                                                                             >
                                                                                 <Trash2 className="w-4 h-4" />
                                                                             </button>
@@ -1096,7 +1167,7 @@ export default function AdminDashboard() {
                                                         <div>
                                                             <label className="text-[8px] font-black text-neutral-700 uppercase mb-1.5 block">Icono</label>
                                                             <select
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-[10px] font-black outline-none focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-3 text-[10px] font-black outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                 value={selectedWidget.data.icon || 'ArrowLeft'}
                                                                 onChange={(e) => updateSelectedWidgetData({ icon: e.target.value })}
                                                             >
@@ -1111,7 +1182,7 @@ export default function AdminDashboard() {
                                                         <div>
                                                             <label className="text-[8px] font-black text-neutral-700 uppercase mb-1.5 block">Estilo del Botón (Template)</label>
                                                             <select
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-[10px] font-black outline-none focus:border-blue-500 text-emerald-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-3 text-[10px] font-black outline-none focus-visible:ring-2 focus-visible:ring-ring/40 text-emerald-500"
                                                                 value={selectedWidget.data.template || 'GLASS'}
                                                                 onChange={(e) => updateSelectedWidgetData({ template: e.target.value })}
                                                             >
@@ -1126,7 +1197,7 @@ export default function AdminDashboard() {
                                                         <div>
                                                             <label className="text-[8px] font-black text-neutral-700 uppercase mb-1.5 block">Texto del Botón</label>
                                                             <input
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-[10px] font-black outline-none focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-3 text-[10px] font-black outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                 value={selectedWidget.data.label || ''}
                                                                 onChange={(e) => updateSelectedWidgetData({ label: e.target.value })}
                                                                 placeholder="Ej: VOLVER"
@@ -1135,7 +1206,7 @@ export default function AdminDashboard() {
                                                         <div>
                                                             <label className="text-[8px] font-black text-neutral-700 uppercase mb-1.5 block">Tipo de Acción</label>
                                                             <select
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-[10px] font-black outline-none focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-3 text-[10px] font-black outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                 value={selectedWidget.data.type || 'BACK'}
                                                                 onChange={(e) => updateSelectedWidgetData({ type: e.target.value })}
                                                             >
@@ -1148,7 +1219,7 @@ export default function AdminDashboard() {
                                                             <div>
                                                                 <label className="text-[8px] font-black text-neutral-700 uppercase mb-1.5 block">Destino (Layout)</label>
                                                                 <select
-                                                                    className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-[10px] font-black outline-none focus:border-blue-500 text-blue-400"
+                                                                    className="w-full bg-muted border border-border rounded-md p-3 text-[10px] font-black outline-none focus-visible:ring-2 focus-visible:ring-ring/40 text-primary"
                                                                     value={selectedWidget.data.targetLayoutId || ''}
                                                                     onChange={(e) => updateSelectedWidgetData({ targetLayoutId: e.target.value })}
                                                                 >
@@ -1161,14 +1232,14 @@ export default function AdminDashboard() {
                                                         )}
                                                         <div>
                                                             <label className="text-[8px] font-black text-neutral-700 uppercase mb-1.5 block">Color del Acento</label>
-                                                            <div className="flex items-center gap-4 bg-black/40 p-3 rounded-md border border-white/5">
+                                                            <div className="flex items-center gap-4 bg-muted p-3 rounded-md border border-border">
                                                                 <input
                                                                     type="color"
                                                                     className="w-10 h-10 border-none bg-transparent rounded-lg cursor-pointer"
                                                                     value={selectedWidget.data.color || '#3b82f6'}
                                                                     onChange={(e) => updateSelectedWidgetData({ color: e.target.value })}
                                                                 />
-                                                                <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{selectedWidget.data.color || '#3B82F6'}</span>
+                                                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{selectedWidget.data.color || '#3B82F6'}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1177,9 +1248,9 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'PRODUCT_LIST' && (
                                                     <div className="space-y-6">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Título del Menú</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Título del Menú</label>
                                                             <input
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black italic outline-none focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black italic outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                 value={selectedWidget.data.title || ''}
                                                                 onChange={(e) => updateSelectedWidgetData({ title: e.target.value })}
                                                                 placeholder="Ej: NUESTRA CARTA"
@@ -1187,11 +1258,11 @@ export default function AdminDashboard() {
                                                         </div>
 
                                                         <div className="space-y-2">
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Categorías a Mostrar</label>
-                                                            <div className="grid grid-cols-1 gap-1.5 bg-black/20 p-3 rounded-lg border border-white/5 max-h-40 overflow-y-auto custom-scrollbar">
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Categorías a Mostrar</label>
+                                                            <div className="grid grid-cols-1 gap-1.5 bg-black/20 p-3 rounded-lg border border-border max-h-40 overflow-y-auto custom-scrollbar">
                                                                 {allCategories.map((cat) => (
                                                                     <label key={cat.id} className="flex items-center justify-between gap-2 cursor-pointer hover:bg-white/5 px-2 py-1.5 rounded transition-all group/catcheck">
-                                                                        <span className="text-[10px] font-black text-neutral-400 uppercase italic group-hover/catcheck:text-blue-400 transition-colors">{cat.name}</span>
+                                                                        <span className="text-[10px] font-black text-muted-foreground uppercase italic group-hover/catcheck:text-primary transition-colors">{cat.name}</span>
                                                                         <input
                                                                             type="checkbox"
                                                                             checked={selectedWidget.data.categoriesToShow?.includes(cat.id) || false}
@@ -1202,17 +1273,17 @@ export default function AdminDashboard() {
                                                                                     : current.filter((id: string) => id !== cat.id);
                                                                                 updateSelectedWidgetData({ categoriesToShow: next });
                                                                             }}
-                                                                            className="w-4 h-4 rounded-md bg-[#111] border-white/10 checked:bg-blue-500 checked:border-blue-500 focus:ring-0 cursor-pointer"
+                                                                            className="w-4 h-4 rounded-md bg-muted border-border checked:bg-primary checked:border-blue-500 focus:ring-0 cursor-pointer"
                                                                         />
                                                                     </label>
                                                                 ))}
                                                                 {allCategories.length === 0 && (
-                                                                    <p className="text-[9px] text-neutral-600 italic p-2">No hay categorías definidas en el catálogo.</p>
+                                                                    <p className="text-[9px] text-muted-foreground italic p-2">No hay categorías definidas en el catálogo.</p>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className="p-4 bg-blue-500/5 rounded-md border border-blue-500/10">
-                                                            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest leading-relaxed">
+                                                        <div className="p-4 bg-primary/5 rounded-md border border-primary/15">
+                                                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-relaxed">
                                                                 Los productos se gestionan desde la pestaña <ShoppingBag className="w-3 h-3 inline mb-0.5" /> **Catálogo** en la barra lateral izquierda.
                                                             </p>
                                                         </div>
@@ -1222,9 +1293,9 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'ACTIVITIES' && (
                                                     <div className="space-y-6">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Título de la Agenda</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Título de la Agenda</label>
                                                             <input
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black italic outline-none focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black italic outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                 value={selectedWidget.data.title || ''}
                                                                 onChange={(e) => updateSelectedWidgetData({ title: e.target.value })}
                                                                 placeholder="Ej: EVENTOS DE HOY"
@@ -1232,9 +1303,9 @@ export default function AdminDashboard() {
                                                         </div>
 
                                                         <div className="space-y-2">
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Sección a Mostrar</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Sección a Mostrar</label>
                                                             <select
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-[11px] font-black outline-none focus:border-blue-500 text-amber-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-4 text-[11px] font-black outline-none focus-visible:ring-2 focus-visible:ring-ring/40 text-amber-500"
                                                                 value={selectedWidget.data.sectionToShow || 'ALL'}
                                                                 onChange={(e) => updateSelectedWidgetData({ sectionToShow: e.target.value })}
                                                             >
@@ -1245,7 +1316,7 @@ export default function AdminDashboard() {
                                                             </select>
                                                         </div>
                                                         <div className="p-4 bg-amber-500/5 rounded-md border border-amber-500/10">
-                                                            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest leading-relaxed">
+                                                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-relaxed">
                                                                 Las actividades se gestionan desde la pestaña <RefreshCw className="w-3 h-3 inline mb-0.5" /> **Cronograma** en la barra lateral izquierda.
                                                             </p>
                                                         </div>
@@ -1255,20 +1326,20 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'WEATHER' && (
                                                     <div className="space-y-6">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Ciudad para Clima en Vivo</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Ciudad para Clima en Vivo</label>
                                                             <input
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black italic outline-none focus:border-blue-500 text-blue-400"
+                                                                className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black italic outline-none focus-visible:ring-2 focus-visible:ring-ring/40 text-primary"
                                                                 value={selectedWidget.data.city || ''}
                                                                 onChange={(e) => updateSelectedWidgetData({ city: e.target.value })}
                                                                 placeholder="Ej: Buenos Aires, AR"
                                                             />
                                                         </div>
-                                                        <div className="p-4 bg-blue-500/5 rounded-lg border border-blue-500/10 space-y-2">
-                                                            <div className="flex items-center gap-2 text-blue-400">
+                                                        <div className="p-4 bg-primary/5 rounded-lg border border-primary/15 space-y-2">
+                                                            <div className="flex items-center gap-2 text-primary">
                                                                 <Sparkles className="w-3 h-3" />
                                                                 <span className="text-[9px] font-black uppercase tracking-widest">Motor Inteligente</span>
                                                             </div>
-                                                            <p className="text-[10px] text-neutral-500 font-medium leading-relaxed">
+                                                            <p className="text-[10px] text-muted-foreground font-medium leading-relaxed">
                                                                 El widget buscará automáticamente la ubicación y clima en tiempo real. No necesitas configurar nada más.
                                                             </p>
                                                         </div>
@@ -1278,20 +1349,20 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'TICKER' && (
                                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Mensaje de la Cinta</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Mensaje de la Cinta</label>
                                                             <textarea
                                                                 value={selectedWidget.data.text || ''}
                                                                 onChange={(e) => updateSelectedWidgetData({ text: e.target.value })}
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-bold text-white outline-none min-h-[120px] focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-4 text-xs font-bold text-foreground outline-none min-h-[120px] focus-visible:ring-2 focus-visible:ring-ring/40"
                                                             />
                                                         </div>
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div>
-                                                                <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Velocidad</label>
-                                                                <input type="number" value={selectedWidget.data.speed} onChange={(e) => updateSelectedWidgetData({ speed: parseInt(e.target.value) })} className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-xs font-black text-white" />
+                                                                <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Velocidad</label>
+                                                                <input type="number" value={selectedWidget.data.speed} onChange={(e) => updateSelectedWidgetData({ speed: parseInt(e.target.value) })} className="w-full bg-muted border border-border rounded-md p-3 text-xs font-black text-foreground" />
                                                             </div>
                                                             <div>
-                                                                <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Fondo</label>
+                                                                <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Fondo</label>
                                                                 <input type="color" value={selectedWidget.data.bgColor} onChange={(e) => updateSelectedWidgetData({ bgColor: e.target.value })} className="w-full h-10 bg-transparent cursor-pointer" />
                                                             </div>
                                                         </div>
@@ -1301,16 +1372,16 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'COUNTDOWN' && (
                                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Fecha Objetivo</label>
-                                                            <input type="datetime-local" value={selectedWidget.data.targetDate?.substring(0, 16) || ''} onChange={(e) => updateSelectedWidgetData({ targetDate: new Date(e.target.value).toISOString() })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white" />
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Fecha Objetivo</label>
+                                                            <input type="datetime-local" value={selectedWidget.data.targetDate?.substring(0, 16) || ''} onChange={(e) => updateSelectedWidgetData({ targetDate: new Date(e.target.value).toISOString() })} className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-foreground" />
                                                         </div>
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Título Superior</label>
-                                                            <input type="text" value={selectedWidget.data.title || ''} onChange={(e) => updateSelectedWidgetData({ title: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Título Superior</label>
+                                                            <input type="text" value={selectedWidget.data.title || ''} onChange={(e) => updateSelectedWidgetData({ title: e.target.value })} className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-foreground italic" />
                                                         </div>
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Nombre del Evento</label>
-                                                            <input type="text" value={selectedWidget.data.subtitle || ''} onChange={(e) => updateSelectedWidgetData({ subtitle: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Nombre del Evento</label>
+                                                            <input type="text" value={selectedWidget.data.subtitle || ''} onChange={(e) => updateSelectedWidgetData({ subtitle: e.target.value })} className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-foreground italic" />
                                                         </div>
                                                     </div>
                                                 )}
@@ -1318,13 +1389,13 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'ATMOSPHERE' && (
                                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-3 italic">Estilo Ambiental</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-3 italic">Estilo Ambiental</label>
                                                             <div className="grid grid-cols-2 gap-2">
                                                                 {['GOLD', 'SNOW', 'SOLAR', 'BUBBLES'].map(t => (
                                                                     <button
                                                                         key={t}
                                                                         onClick={() => updateSelectedWidgetData({ type: t })}
-                                                                        className={`py-6 rounded-xl border text-[10px] font-black transition-all ${selectedWidget.data.type === t ? 'bg-amber-500 border-amber-400 text-white shadow-lg shadow-amber-500/20' : 'bg-black/40 border-white/5 text-neutral-600 hover:text-white hover:bg-white/5'}`}
+                                                                        className={`py-6 rounded-xl border text-[10px] font-black transition-all ${selectedWidget.data.type === t ? 'bg-amber-500 border-amber-400 text-foreground shadow-lg shadow-amber-500/20' : 'bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
                                                                     >
                                                                         {t}
                                                                     </button>
@@ -1332,7 +1403,7 @@ export default function AdminDashboard() {
                                                             </div>
                                                         </div>
                                                         <div className="pt-4">
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-4 italic">Intensidad ({selectedWidget.data.intensity})</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-4 italic">Intensidad ({selectedWidget.data.intensity})</label>
                                                             <input type="range" min="5" max="100" value={selectedWidget.data.intensity} onChange={(e) => updateSelectedWidgetData({ intensity: parseInt(e.target.value) })} className="w-full h-1.5 bg-white/10 rounded-full appearance-none accent-amber-500 cursor-pointer" />
                                                         </div>
                                                     </div>
@@ -1341,15 +1412,15 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'MUSIC_PLAYER' && (
                                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Canción / Radio</label>
-                                                            <input type="text" value={selectedWidget.data.song || ''} onChange={(e) => updateSelectedWidgetData({ song: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Canción / Radio</label>
+                                                            <input type="text" value={selectedWidget.data.song || ''} onChange={(e) => updateSelectedWidgetData({ song: e.target.value })} className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-foreground italic" />
                                                         </div>
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Créditos</label>
-                                                            <input type="text" value={selectedWidget.data.artist || ''} onChange={(e) => updateSelectedWidgetData({ artist: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white italic" />
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Créditos</label>
+                                                            <input type="text" value={selectedWidget.data.artist || ''} onChange={(e) => updateSelectedWidgetData({ artist: e.target.value })} className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-foreground italic" />
                                                         </div>
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Color Visualizer</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Color Visualizer</label>
                                                             <input type="color" value={selectedWidget.data.accentColor || '#10b981'} onChange={(e) => updateSelectedWidgetData({ accentColor: e.target.value })} className="w-full h-10 bg-transparent cursor-pointer" />
                                                         </div>
                                                     </div>
@@ -1358,8 +1429,8 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'FLIGHT_BOARD' && (
                                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Configuración Tablero</label>
-                                                            <select value={selectedWidget.data.type} onChange={(e) => updateSelectedWidgetData({ type: e.target.value })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white outline-none focus:border-blue-500">
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Configuración Tablero</label>
+                                                            <select value={selectedWidget.data.type} onChange={(e) => updateSelectedWidgetData({ type: e.target.value })} className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                                                                 <option value="DEPARTURES">VUELOS: SALIDAS</option>
                                                                 <option value="ARRIVALS">VUELOS: LLEGADAS</option>
                                                             </select>
@@ -1370,15 +1441,15 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'SOCIAL_FEED' && (
                                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Intervalo de Rotación (ms)</label>
-                                                            <input type="number" step="1000" min="3000" value={selectedWidget.data.interval} onChange={(e) => updateSelectedWidgetData({ interval: parseInt(e.target.value) })} className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black text-white" />
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Intervalo de Rotación (ms)</label>
+                                                            <input type="number" step="1000" min="3000" value={selectedWidget.data.interval} onChange={(e) => updateSelectedWidgetData({ interval: parseInt(e.target.value) })} className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black text-foreground" />
                                                         </div>
                                                         <div className="p-4 bg-pink-500/5 rounded-lg border border-pink-500/10 flex flex-col gap-2">
                                                             <div className="flex items-center gap-2 text-pink-500">
                                                                 <Instagram className="w-4 h-4" />
                                                                 <span className="text-[9px] font-black uppercase tracking-widest">Feed de Instagram</span>
                                                             </div>
-                                                            <p className="text-[10px] text-neutral-500 leading-relaxed italic">
+                                                            <p className="text-[10px] text-muted-foreground leading-relaxed italic">
                                                                 El sistema alterna automáticamente entre las últimas fotos de Instagram y reseñas premium de TripAdvisor.
                                                             </p>
                                                         </div>
@@ -1388,30 +1459,30 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'PRICE_LIST' && (
                                                     <div className="space-y-6">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2 italic">Título del Listado</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2 italic">Título del Listado</label>
                                                             <input
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-4 text-xs font-black italic outline-none focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-4 text-xs font-black italic outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                 value={selectedWidget.data.title || ''}
                                                                 onChange={(e) => updateSelectedWidgetData({ title: e.target.value })}
                                                                 placeholder="Ej: LISTA DE PRECIOS"
                                                             />
                                                         </div>
-                                                        <div className="space-y-3 pt-4 border-t border-white/5">
-                                                            <div className="flex justify-between items-center bg-[#111] px-4 py-2 rounded-md">
-                                                                <span className="text-[9px] font-black text-neutral-500 tracking-[0.2em] uppercase">Items de Precios</span>
+                                                        <div className="space-y-3 pt-4 border-t border-border">
+                                                            <div className="flex justify-between items-center bg-muted px-4 py-2 rounded-md">
+                                                                <span className="text-[9px] font-black text-muted-foreground tracking-[0.2em] uppercase">Items de Precios</span>
                                                                 <button
                                                                     onClick={() => updateSelectedWidgetData({ items: [...(selectedWidget.data.items || []), { name: 'Item Nuevo', price: '$0.00', description: '' }] })}
-                                                                    className="text-blue-500 hover:text-white transition-colors"
+                                                                    className="text-primary hover:text-foreground transition-colors"
                                                                 >
                                                                     <Plus className="w-4 h-4" />
                                                                 </button>
                                                             </div>
                                                             <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                                                                 {selectedWidget.data.items?.map((item: any, idx: number) => (
-                                                                    <div key={idx} className="bg-[#111]/50 p-4 rounded-md border border-white/5 space-y-3">
+                                                                    <div key={idx} className="bg-muted/50 p-4 rounded-md border border-border space-y-3">
                                                                         <div className="flex gap-2">
                                                                             <input
-                                                                                className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-black italic outline-none text-white focus:border-blue-500/50"
+                                                                                className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-xs font-black italic outline-none text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                                 value={item.name || ''}
                                                                                 onChange={(e) => {
                                                                                     const newItems = [...selectedWidget.data.items];
@@ -1420,7 +1491,7 @@ export default function AdminDashboard() {
                                                                                 }}
                                                                             />
                                                                             <input
-                                                                                className="w-24 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-black text-blue-500 outline-none"
+                                                                                className="w-24 bg-muted border border-border rounded-lg px-3 py-2 text-xs font-black text-primary outline-none"
                                                                                 value={item.price || ''}
                                                                                 onChange={(e) => {
                                                                                     const newItems = [...selectedWidget.data.items];
@@ -1430,7 +1501,7 @@ export default function AdminDashboard() {
                                                                             />
                                                                         </div>
                                                                         <textarea
-                                                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] text-neutral-400 outline-none h-12 resize-none"
+                                                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-[10px] text-muted-foreground outline-none h-12 resize-none"
                                                                             value={item.description || ''}
                                                                             onChange={(e) => {
                                                                                 const newItems = [...selectedWidget.data.items];
@@ -1444,7 +1515,7 @@ export default function AdminDashboard() {
                                                                                     const newItems = selectedWidget.data.items.filter((_: any, i: number) => i !== idx);
                                                                                     updateSelectedWidgetData({ items: newItems });
                                                                                 }}
-                                                                                className="text-red-500/40 hover:text-red-500 transition-colors"
+                                                                                className="text-destructive/40 hover:text-destructive transition-colors"
                                                                             >
                                                                                 <Trash2 className="w-3.5 h-3.5" />
                                                                             </button>
@@ -1459,9 +1530,9 @@ export default function AdminDashboard() {
                                                 {selectedWidget.type === 'DATE_TIME' && (
                                                     <div className="space-y-6">
                                                         <div>
-                                                            <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2">Estilo Visual</label>
+                                                            <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2">Estilo Visual</label>
                                                             <select
-                                                                className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-xs font-black text-white outline-none focus:border-blue-500"
+                                                                className="w-full bg-muted border border-border rounded-md p-3 text-xs font-black text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                                                 value={selectedWidget.data.style || 'minimal'}
                                                                 onChange={(e) => updateSelectedWidgetData({ style: e.target.value })}
                                                             >
@@ -1475,9 +1546,9 @@ export default function AdminDashboard() {
                                                         </div>
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div>
-                                                                <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2">Formato</label>
+                                                                <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2">Formato</label>
                                                                 <select
-                                                                    className="w-full bg-[#111] border border-white/5 rounded-md p-3 text-xs font-black text-white outline-none"
+                                                                    className="w-full bg-muted border border-border rounded-md p-3 text-xs font-black text-foreground outline-none"
                                                                     value={selectedWidget.data.format || '24'}
                                                                     onChange={(e) => updateSelectedWidgetData({ format: e.target.value })}
                                                                 >
@@ -1486,8 +1557,8 @@ export default function AdminDashboard() {
                                                                 </select>
                                                             </div>
                                                             <div>
-                                                                <label className="text-[9px] text-neutral-600 uppercase block font-black mb-2">Color Texto</label>
-                                                                <div className="flex bg-[#111] border border-white/5 rounded-md p-2">
+                                                                <label className="text-[9px] text-muted-foreground uppercase block font-black mb-2">Color Texto</label>
+                                                                <div className="flex bg-muted border border-border rounded-md p-2">
                                                                     <input
                                                                         type="color"
                                                                         className="w-full h-6 bg-transparent cursor-pointer"
@@ -1497,24 +1568,24 @@ export default function AdminDashboard() {
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div className="space-y-3 pt-4 border-t border-white/5">
+                                                        <div className="space-y-3 pt-4 border-t border-border">
                                                             <label className="flex items-center gap-3 cursor-pointer group">
                                                                 <input
                                                                     type="checkbox"
-                                                                    className="w-4 h-4 rounded bg-[#111] border-white/10 checked:bg-blue-500"
+                                                                    className="w-4 h-4 rounded bg-muted border-border checked:bg-primary"
                                                                     checked={selectedWidget.data.showDate !== false}
                                                                     onChange={(e) => updateSelectedWidgetData({ showDate: e.target.checked })}
                                                                 />
-                                                                <span className="text-xs font-bold text-neutral-400 group-hover:text-white transition-colors">Mostrar Fecha</span>
+                                                                <span className="text-xs font-bold text-muted-foreground group-hover:text-foreground transition-colors">Mostrar Fecha</span>
                                                             </label>
                                                             <label className="flex items-center gap-3 cursor-pointer group">
                                                                 <input
                                                                     type="checkbox"
-                                                                    className="w-4 h-4 rounded bg-[#111] border-white/10 checked:bg-blue-500"
+                                                                    className="w-4 h-4 rounded bg-muted border-border checked:bg-primary"
                                                                     checked={selectedWidget.data.showSeconds !== false}
                                                                     onChange={(e) => updateSelectedWidgetData({ showSeconds: e.target.checked })}
                                                                 />
-                                                                <span className="text-xs font-bold text-neutral-400 group-hover:text-white transition-colors">Mostrar Segundos</span>
+                                                                <span className="text-xs font-bold text-muted-foreground group-hover:text-foreground transition-colors">Mostrar Segundos</span>
                                                             </label>
                                                         </div>
                                                     </div>
@@ -1522,185 +1593,278 @@ export default function AdminDashboard() {
                                             </div>
                                         </section>
 
-                                        <div className="p-8 border-t border-white/5 space-y-4 bg-red-500/5">
-                                            <button
+                                        <div className="px-5 py-4 border-t bg-card/30">
+                                            <Button
                                                 onClick={() => {
                                                     setWidgets(widgets.filter(w => w.id !== selectedWidgetId));
                                                     setSelectedWidgetId(null);
                                                 }}
-                                                className="w-full flex items-center justify-center gap-3 py-4 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white text-[11px] font-black uppercase rounded-lg border border-red-500/20 transition-all"
+                                                variant="destructive"
+                                                className="w-full"
+                                                size="sm"
                                             >
-                                                <Trash2 className="w-4 h-4" /> Eliminar Objeto
-                                            </button>
+                                                <Trash2 className="size-4" /> Eliminar widget
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="flex-1 flex flex-col p-8 space-y-10 overflow-y-auto">
-                                    <div className="space-y-10">
-                                        <div className="space-y-8">
-                                            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center gap-3">
-                                                <Settings2 className="w-6 h-6 text-blue-500" /> Lienzo Maestro
-                                            </h3>
+                                <Tabs defaultValue="lienzo" className="flex-1 flex flex-col min-h-0 p-5 gap-3">
+                                    <TabsList className="w-full grid grid-cols-2">
+                                        <TabsTrigger value="lienzo">
+                                            <ImageIcon className="size-3.5" /> Lienzo
+                                        </TabsTrigger>
+                                        <TabsTrigger value="capas">
+                                            <Layers className="size-3.5" /> Capas
+                                            {widgets.length > 0 && (
+                                                <span className="ml-1 size-4 rounded-full bg-primary/15 text-primary text-[9px] font-bold grid place-items-center">{widgets.length}</span>
+                                            )}
+                                        </TabsTrigger>
+                                    </TabsList>
 
-                                            <div className="space-y-6">
-                                                <div className="space-y-4">
-                                                    <div className="flex items-center justify-between">
-                                                        <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Color de Fondo</label>
-                                                        <input
-                                                            type="color"
-                                                            value={backgroundColor}
-                                                            onChange={(e) => setBackgroundColor(e.target.value)}
-                                                            className="w-10 h-10 rounded-md bg-transparent border-none cursor-pointer"
-                                                        />
-                                                    </div>
+                                    <TabsContent value="lienzo" className="flex-1 min-h-0 overflow-y-auto pr-1">
+                                        <div className="space-y-5">
+                                            {/* Background section */}
+                                            <section className="rounded-lg border bg-card p-4 space-y-4">
+                                                <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                                                    <Palette className="size-3" /> Fondo
+                                                </h4>
 
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-[12px] font-medium">Color de fondo</Label>
+                                                    <input
+                                                        type="color"
+                                                        value={backgroundColor}
+                                                        onChange={(e) => setBackgroundColor(e.target.value)}
+                                                        className="size-9 rounded-md border bg-transparent cursor-pointer overflow-hidden"
+                                                    />
+                                                </div>
+
+                                                <Separator />
+
+                                                <div className="space-y-2">
+                                                    <Label className="text-[12px] font-medium">Imagen de fondo</Label>
                                                     <ImageUpload
-                                                        label="Fondo de Imagen"
+                                                        label="Subir imagen"
                                                         onUploadSuccess={(url) => {
                                                             setBackgroundImage(url);
                                                             setBackgroundVideo('');
                                                         }}
                                                     />
-
-                                                    <div className="space-y-2">
-                                                        <label className="text-[9px] text-neutral-600 uppercase block font-black mb-1">URL de Video Fondo</label>
-                                                        <input
-                                                            className="w-full bg-black/40 border border-white/5 rounded-md p-3 text-xs font-bold text-blue-400 outline-none"
-                                                            value={backgroundVideo}
-                                                            onChange={(e) => {
-                                                                setBackgroundVideo(e.target.value);
-                                                                setBackgroundImage('');
-                                                            }}
-                                                            placeholder="https://..."
-                                                        />
-                                                        <ImageUpload
-                                                            compact
-                                                            label="O sube tu propio video"
-                                                            onUploadSuccess={(url) => {
-                                                                setBackgroundVideo(url);
-                                                                setBackgroundImage('');
-                                                            }}
-                                                        />
-                                                    </div>
-
-                                                    {(backgroundImage || backgroundVideo) && (
-                                                        <div className="relative group aspect-video rounded-lg overflow-hidden border border-white/10 shadow-2xl">
-                                                            {backgroundImage ? (
-                                                                <img src={backgroundImage} className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <video src={backgroundVideo} className="w-full h-full object-cover" autoPlay muted loop />
-                                                            )}
-                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setBackgroundImage('');
-                                                                        setBackgroundVideo('');
-                                                                    }}
-                                                                    className="bg-red-500 text-white p-2 rounded-md"
-                                                                >
-                                                                    <Trash2 className="w-5 h-5" />
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    )}
                                                 </div>
 
-                                                <div className="space-y-4 pt-6 border-t border-white/5">
-                                                    <div className="flex justify-between items-center">
-                                                        <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
-                                                            <Sparkles className="w-4 h-4" /> Estilo Atmosférico
-                                                        </label>
-                                                        <span className="text-[10px] font-black text-blue-500">{backgroundBlur}px</span>
+                                                <div className="space-y-2">
+                                                    <Label className="text-[12px] font-medium">Video de fondo</Label>
+                                                    <Input
+                                                        type="url"
+                                                        value={backgroundVideo}
+                                                        onChange={(e) => { setBackgroundVideo(e.target.value); setBackgroundImage(''); }}
+                                                        placeholder="https://..."
+                                                        className="h-9"
+                                                    />
+                                                    <ImageUpload
+                                                        compact
+                                                        label="O subir video"
+                                                        onUploadSuccess={(url) => { setBackgroundVideo(url); setBackgroundImage(''); }}
+                                                    />
+                                                </div>
+
+                                                {(backgroundImage || backgroundVideo) && (
+                                                    <div className="relative group aspect-video rounded-md overflow-hidden border">
+                                                        {backgroundImage ? (
+                                                            <img src={backgroundImage} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <video src={backgroundVideo} className="w-full h-full object-cover" autoPlay muted loop />
+                                                        )}
+                                                        <div className="absolute inset-0 bg-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="destructive"
+                                                                onClick={() => { setBackgroundImage(''); setBackgroundVideo(''); }}
+                                                            >
+                                                                <Trash2 className="size-3.5" /> Quitar
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </section>
+
+                                            {/* Atmosphere */}
+                                            <section className="rounded-lg border bg-card p-4 space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                                                        <Sparkles className="size-3" /> Atmosfera
+                                                    </h4>
+                                                    <span className="text-[11px] font-mono tabular-nums text-primary">{backgroundBlur}px</span>
+                                                </div>
+                                                <input
+                                                    type="range" min="0" max="40"
+                                                    value={backgroundBlur}
+                                                    onChange={(e) => setBackgroundBlur(parseInt(e.target.value))}
+                                                    className="w-full h-1.5 bg-muted rounded-full appearance-none cursor-pointer accent-primary"
+                                                />
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Desenfoca el fondo para dar profundidad al contenido superior.
+                                                </p>
+                                            </section>
+
+                                            {/* Overlay / Mask */}
+                                            <section className="rounded-lg border bg-card p-4 space-y-4">
+                                                <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                                                    <Layers className="size-3" /> Mascara / Overlay
+                                                </h4>
+
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-[12px] font-medium">Color overlay</Label>
+                                                    <input
+                                                        type="color"
+                                                        value={backgroundOverlayColor}
+                                                        onChange={(e) => setBackgroundOverlayColor(e.target.value)}
+                                                        className="size-8 rounded-md border bg-transparent cursor-pointer overflow-hidden"
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between text-[11px]">
+                                                        <span className="text-muted-foreground">Opacidad</span>
+                                                        <span className="font-mono tabular-nums text-foreground">{Math.round(backgroundOverlayOpacity * 100)}%</span>
                                                     </div>
                                                     <input
-                                                        type="range" min="0" max="40"
-                                                        value={backgroundBlur}
-                                                        onChange={(e) => setBackgroundBlur(parseInt(e.target.value))}
-                                                        className="w-full h-1.5 bg-[#1a1a1a] rounded-full appearance-none cursor-pointer accent-blue-500 shadow-inner"
+                                                        type="range" min="0" max="1" step="0.05"
+                                                        value={backgroundOverlayOpacity}
+                                                        onChange={(e) => setBackgroundOverlayOpacity(parseFloat(e.target.value))}
+                                                        className="w-full h-1.5 bg-muted rounded-full appearance-none cursor-pointer accent-primary"
                                                     />
-                                                    <p className="text-[9px] text-neutral-600 font-bold leading-relaxed">
-                                                        Aumenta el desenfoque para dar un toque sofisticado y premium a tu menú interactivo.
-                                                    </p>
                                                 </div>
 
-                                                <div className="space-y-6 pt-6 border-t border-white/5">
-                                                    <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2 mb-4">
-                                                        <Palette className="w-4 h-4" /> Capas de Diseño (Masks)
-                                                    </h4>
+                                                <Separator />
 
-                                                    <div className="space-y-4">
-                                                        <div className="flex items-center justify-between">
-                                                            <label className="text-[9px] text-neutral-400 font-black uppercase">Color de Overlay</label>
-                                                            <input
-                                                                type="color"
-                                                                value={backgroundOverlayColor}
-                                                                onChange={(e) => setBackgroundOverlayColor(e.target.value)}
-                                                                className="w-8 h-8 rounded bg-transparent border-none cursor-pointer"
-                                                            />
-                                                        </div>
-
-                                                        <div className="space-y-2">
-                                                            <div className="flex justify-between text-[9px] font-black text-neutral-500 uppercase">
-                                                                <span>Opacidad Máscara</span>
-                                                                <span>{Math.round(backgroundOverlayOpacity * 100)}%</span>
-                                                            </div>
-                                                            <input
-                                                                type="range" min="0" max="1" step="0.05"
-                                                                value={backgroundOverlayOpacity}
-                                                                onChange={(e) => setBackgroundOverlayOpacity(parseFloat(e.target.value))}
-                                                                className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500"
-                                                            />
-                                                        </div>
-
-                                                        <div className="space-y-2">
-                                                            <label className="text-[9px] text-neutral-400 font-black uppercase block mb-2">Patrón de Textura</label>
-                                                            <div className="grid grid-cols-5 gap-2">
-                                                                {(['none', 'dots', 'grid', 'waves', 'noise'] as const).map(p => (
-                                                                    <button
-                                                                        key={p}
-                                                                        onClick={() => setBackgroundPattern(p)}
-                                                                        className={`p-2 rounded border text-[8px] font-black uppercase transition-all ${backgroundPattern === p ? 'bg-blue-600 border-blue-500 text-white' : 'bg-black/40 border-white/5 text-neutral-600'}`}
-                                                                    >
-                                                                        {p}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-
-                                                        {backgroundPattern !== 'none' && (
-                                                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                                                <div className="flex justify-between text-[9px] font-black text-neutral-500 uppercase">
-                                                                    <span>Intensidad Patrón</span>
-                                                                    <span>{Math.round(backgroundPatternOpacity * 100)}%</span>
-                                                                </div>
-                                                                <input
-                                                                    type="range" min="0" max="1" step="0.05"
-                                                                    value={backgroundPatternOpacity}
-                                                                    onChange={(e) => setBackgroundPatternOpacity(parseFloat(e.target.value))}
-                                                                    className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500"
-                                                                />
-                                                            </div>
-                                                        )}
+                                                <div className="space-y-2">
+                                                    <Label className="text-[12px] font-medium">Patron de textura</Label>
+                                                    <div className="grid grid-cols-5 gap-1.5">
+                                                        {(['none', 'dots', 'grid', 'waves', 'noise'] as const).map(pat => (
+                                                            <button
+                                                                key={pat}
+                                                                onClick={() => setBackgroundPattern(pat)}
+                                                                className={'h-9 rounded-md border text-[10px] font-bold uppercase tracking-wide transition-colors ' + (
+                                                                    backgroundPattern === pat
+                                                                        ? 'bg-primary text-primary-foreground border-primary'
+                                                                        : 'bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                                                                )}
+                                                            >
+                                                                {pat}
+                                                            </button>
+                                                        ))}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </div>
 
-                                        <div className="bg-blue-600/5 p-8 rounded-lg border border-blue-500/10 space-y-4">
-                                            <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                                <Globe className="w-4 h-4" /> Centro de Operaciones
-                                            </h4>
-                                            <p className="text-[11px] text-neutral-400 font-medium leading-relaxed">
-                                                Desde aquí controlas la estética global. Todo cambio se sincroniza en tiempo real con las pantallas activas del hotel.
-                                            </p>
+                                                {backgroundPattern !== 'none' && (
+                                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                                        <div className="flex justify-between text-[11px]">
+                                                            <span className="text-muted-foreground">Intensidad</span>
+                                                            <span className="font-mono tabular-nums text-foreground">{Math.round(backgroundPatternOpacity * 100)}%</span>
+                                                        </div>
+                                                        <input
+                                                            type="range" min="0" max="1" step="0.05"
+                                                            value={backgroundPatternOpacity}
+                                                            onChange={(e) => setBackgroundPatternOpacity(parseFloat(e.target.value))}
+                                                            className="w-full h-1.5 bg-muted rounded-full appearance-none cursor-pointer accent-primary"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </section>
                                         </div>
-                                    </div>
-                                </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="capas" className="flex-1 min-h-0 overflow-y-auto pr-1">
+                                        {widgets.length === 0 ? (
+                                            <div className="text-center py-12 px-6 rounded-lg border border-dashed text-muted-foreground">
+                                                <Layers className="size-6 mx-auto mb-3 opacity-50" />
+                                                <p className="text-[13px] font-medium mb-1">Sin capas en el lienzo</p>
+                                                <p className="text-[11px]">Agrega widgets desde la barra superior para empezar.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1.5">
+                                                <p className="text-[11px] text-muted-foreground mb-2 px-1">
+                                                    Las capas superiores se dibujan encima. Usa las flechas para reordenar.
+                                                </p>
+                                                {[...widgets]
+                                                    .sort((a, b) => (b.zIndex || 1) - (a.zIndex || 1))
+                                                    .map((w, idx, arr) => {
+                                                        const isSel = selectedWidgetId === w.id;
+                                                        const isFirst = idx === 0;
+                                                        const isLast = idx === arr.length - 1;
+                                                        return (
+                                                            <div
+                                                                key={w.id}
+                                                                onClick={() => setSelectedWidgetId(w.id)}
+                                                                className={'group flex items-center gap-2 rounded-md border px-2 py-1.5 cursor-pointer transition-colors ' + (
+                                                                    isSel ? 'bg-primary/10 border-primary/40' : 'bg-card hover:bg-accent border-border'
+                                                                )}
+                                                            >
+                                                                <span className="font-mono text-[10px] tabular-nums text-muted-foreground w-6 text-right">
+                                                                    {w.zIndex || 1}
+                                                                </span>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="text-[12px] font-semibold truncate">{w.type}</div>
+                                                                    <div className="text-[10px] text-muted-foreground font-mono">
+                                                                        {Math.round(w.x)},{Math.round(w.y)} · {Math.round(w.w)}x{Math.round(w.h)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); bringToFrontWidget(w.id); }}
+                                                                        disabled={isFirst}
+                                                                        title="Traer al frente"
+                                                                        className="size-7 grid place-items-center rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none"
+                                                                    >
+                                                                        <ChevronsUp className="size-3.5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); moveLayerUp(w.id); }}
+                                                                        disabled={isFirst}
+                                                                        title="Subir capa"
+                                                                        className="size-7 grid place-items-center rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none"
+                                                                    >
+                                                                        <ArrowUp className="size-3.5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); moveLayerDown(w.id); }}
+                                                                        disabled={isLast}
+                                                                        title="Bajar capa"
+                                                                        className="size-7 grid place-items-center rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none"
+                                                                    >
+                                                                        <ArrowDown className="size-3.5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); sendToBackWidget(w.id); }}
+                                                                        disabled={isLast}
+                                                                        title="Enviar al fondo"
+                                                                        className="size-7 grid place-items-center rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none"
+                                                                    >
+                                                                        <ChevronsDown className="size-3.5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); removeWidget(w.id); }}
+                                                                        title="Eliminar"
+                                                                        className="size-7 grid place-items-center rounded hover:bg-destructive/15 hover:text-destructive"
+                                                                    >
+                                                                        <Trash2 className="size-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                            </div>
+                                        )}
+                                    </TabsContent>
+                                </Tabs>
                             )
                         }
                     </div>
                 </motion.aside>
+                </motion.div>
+                )}</AnimatePresence>
             </div >
 
             {/* Custom Styled Confirmation Modal */}
@@ -1717,28 +1881,28 @@ export default function AdminDashboard() {
                                 initial={{ scale: 0.9, y: 20 }}
                                 animate={{ scale: 1, y: 0 }}
                                 exit={{ scale: 0.9, y: 20 }}
-                                className="bg-[#111] border border-white/10 p-8 rounded-xl max-w-md w-full shadow-2xl relative overflow-hidden"
+                                className="bg-muted border border-border p-8 rounded-xl max-w-md w-full shadow-2xl relative overflow-hidden"
                             >
                                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600" />
                                 <div className="flex flex-col items-center text-center gap-4 relative z-10">
-                                    <div className="w-16 h-16 bg-blue-500/10 rounded-lg flex items-center justify-center mb-2">
-                                        <LayoutIcon className="w-8 h-8 text-blue-500" />
+                                    <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center mb-2">
+                                        <LayoutIcon className="w-8 h-8 text-primary" />
                                     </div>
-                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">¿Crear Nuevo Lienzo?</h3>
-                                    <p className="text-sm text-neutral-400 leading-relaxed font-medium">
+                                    <h3 className="text-2xl font-black text-foreground uppercase italic tracking-tighter">¿Crear Nuevo Lienzo?</h3>
+                                    <p className="text-sm text-muted-foreground leading-relaxed font-medium">
                                         Estás a punto de iniciar un diseño limpio. Cualquier cambio no guardado en el layout actual se perderá irreversiblemente.
                                     </p>
 
                                     <div className="grid grid-cols-2 gap-4 w-full mt-6">
                                         <button
                                             onClick={() => setShowResetConfirm(false)}
-                                            className="py-4 rounded-md bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white font-black uppercase tracking-widest text-[10px] transition-all"
+                                            className="py-4 rounded-md bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground font-black uppercase tracking-widest text-[10px] transition-all"
                                         >
                                             Cancelar
                                         </button>
                                         <button
                                             onClick={handleConfirmReset}
-                                            className="py-4 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-blue-600/20 transition-all active:scale-95"
+                                            className="py-4 rounded-md bg-primary hover:bg-primary text-foreground font-black uppercase tracking-widest text-[10px] shadow-lg shadow-blue-600/20 transition-all active:scale-95"
                                         >
                                             Confirmar Nuevo
                                         </button>
@@ -1764,22 +1928,22 @@ export default function AdminDashboard() {
                                 initial={{ scale: 0.9, y: 20 }}
                                 animate={{ scale: 1, y: 0 }}
                                 exit={{ scale: 0.9, y: 20 }}
-                                className="bg-[#111] border border-white/10 p-8 rounded-xl max-w-md w-full shadow-2xl relative overflow-hidden"
+                                className="bg-muted border border-border p-8 rounded-xl max-w-md w-full shadow-2xl relative overflow-hidden"
                             >
                                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-orange-600" />
                                 <div className="flex flex-col items-center text-center gap-4 relative z-10">
-                                    <div className="w-16 h-16 bg-red-500/10 rounded-lg flex items-center justify-center mb-2">
-                                        <Trash2 className="w-8 h-8 text-red-500" />
+                                    <div className="w-16 h-16 bg-destructive/10 rounded-lg flex items-center justify-center mb-2">
+                                        <Trash2 className="w-8 h-8 text-destructive" />
                                     </div>
-                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">¿Eliminar Diseño?</h3>
-                                    <p className="text-sm text-neutral-400 leading-relaxed font-medium">
-                                        <span className="text-white font-bold">{layoutToDelete.name}</span> será eliminado permanentemente de la base de datos. Esta acción no se puede deshacer.
+                                    <h3 className="text-2xl font-black text-foreground uppercase italic tracking-tighter">¿Eliminar Diseño?</h3>
+                                    <p className="text-sm text-muted-foreground leading-relaxed font-medium">
+                                        <span className="text-foreground font-bold">{layoutToDelete.name}</span> será eliminado permanentemente de la base de datos. Esta acción no se puede deshacer.
                                     </p>
 
                                     <div className="grid grid-cols-2 gap-4 w-full mt-6">
                                         <button
                                             onClick={() => setLayoutToDelete(null)}
-                                            className="py-4 rounded-md bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white font-black uppercase tracking-widest text-[10px] transition-all"
+                                            className="py-4 rounded-md bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground font-black uppercase tracking-widest text-[10px] transition-all"
                                         >
                                             Cancelar
                                         </button>
@@ -1789,7 +1953,7 @@ export default function AdminDashboard() {
                                                 setLayoutToDelete(null);
                                                 setTimeout(fetchLayouts, 500);
                                             }}
-                                            className="py-4 rounded-md bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-600/20 transition-all active:scale-95"
+                                            className="py-4 rounded-md bg-red-600 hover:bg-destructive text-foreground font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-600/20 transition-all active:scale-95"
                                         >
                                             Confirmar Eliminar
                                         </button>
@@ -1800,6 +1964,7 @@ export default function AdminDashboard() {
                     )
                 }
             </AnimatePresence >
+            <Toaster />
         </div >
     );
 }

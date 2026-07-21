@@ -1,200 +1,356 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import * as React from 'react';
 import { io, Socket } from 'socket.io-client';
-import { AdminHeader } from '@/components/admin/AdminHeader';
-import { Database, Plus, RefreshCw, Trash2, Copy, Eye, Layout as LayoutIcon, Search, Monitor, Smartphone, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import Database from 'lucide-react/dist/esm/icons/database';
+import Plus from 'lucide-react/dist/esm/icons/plus';
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2';
+import Copy from 'lucide-react/dist/esm/icons/copy';
+import Search from 'lucide-react/dist/esm/icons/search';
+import Monitor from 'lucide-react/dist/esm/icons/monitor';
+import Smartphone from 'lucide-react/dist/esm/icons/smartphone';
+import Edit3 from 'lucide-react/dist/esm/icons/edit-3';
+import MoreHorizontal from 'lucide-react/dist/esm/icons/more-horizontal';
+import { AdminHeader } from '@/components/admin/AdminHeader';
 import { ViewToggler } from '@/components/admin/ViewToggler';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
 
 let socket: Socket;
 
 export default function LayoutsPage() {
-    const [layouts, setLayouts] = useState<any[]>([]);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+    const [layouts, setLayouts] = React.useState<any[]>([]);
+    const [search, setSearch] = React.useState('');
+    const [viewMode, setViewMode] = React.useState<'grid' | 'table'>('grid');
+    const [isCreating, setIsCreating] = React.useState(false);
+    const [newName, setNewName] = React.useState('');
+    const [newOrientation, setNewOrientation] = React.useState<'landscape' | 'portrait'>('landscape');
+    const [toDelete, setToDelete] = React.useState<any>(null);
 
-    const fetchLayouts = useCallback(() => {
-        if (socket) {
-            socket.emit('get_layouts');
-        }
+    const fetchLayouts = React.useCallback(() => {
+        if (socket) socket.emit('get_layouts');
     }, []);
 
-    useEffect(() => {
+    React.useEffect(() => {
         socket = io();
-        socket.on('connect', () => {
-            setLoading(false);
-            fetchLayouts();
-        });
-        socket.on('layouts_list', (data) => setLayouts(data));
-
+        socket.on('connect', fetchLayouts);
+        socket.on('layouts_list', (data: any[]) => setLayouts(data));
         return () => { socket.disconnect(); };
     }, [fetchLayouts]);
 
-    const handleDelete = (id: string) => {
-        if (confirm('¿Seguro que deseas eliminar este diseño permanentemente?')) {
-            socket.emit('delete_layout', id);
-            setTimeout(fetchLayouts, 500);
-        }
+    const handleDelete = () => {
+        if (!toDelete) return;
+        socket.emit('delete_layout', toDelete._id);
+        toast.success('Diseño eliminado', { description: toDelete.name });
+        setToDelete(null);
+        setTimeout(fetchLayouts, 400);
     };
 
     const handleDuplicate = (layout: any) => {
-        if (confirm('¿Crear una copia de este diseño?')) {
-            const newLayout = { ...layout };
-            delete newLayout._id;
-            delete newLayout.__v;
-            newLayout.name = `${layout.name} (Copia)`;
-            socket.emit('save_layout', { screenId: null, layout: newLayout });
-            setTimeout(fetchLayouts, 800);
-        }
+        const copy = { ...layout };
+        delete copy._id;
+        delete copy.__v;
+        copy.name = layout.name + ' (Copia)';
+        socket.emit('save_layout', { screenId: null, layout: copy });
+        toast.success('Copia creada', { description: copy.name });
+        setTimeout(fetchLayouts, 800);
     };
 
-    const filtered = layouts.filter(l => l.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const handleCreate = () => {
+        if (!newName.trim()) { toast.error('El nombre es requerido'); return; }
+        socket.emit('save_layout', {
+            screenId: null,
+            layout: { name: newName, orientation: newOrientation, widgets: [], backgroundColor: '#ffffff' },
+        });
+        toast.success('Diseño creado', { description: newName });
+        setIsCreating(false);
+        setNewName('');
+        setTimeout(fetchLayouts, 800);
+    };
+
+    const filtered = layouts.filter((l) => l.name.toLowerCase().includes(search.toLowerCase()));
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 bg-[#050505]">
+        <div className="flex-1 flex flex-col min-h-0 bg-background text-foreground">
             <AdminHeader
-                title="Diseños Guardados"
-                subtitle="Biblioteca de lienzos y plantillas"
-                icon={<Database className="w-5 h-5" />}
+                title="Galería de diseños"
+                subtitle="Lienzos y composiciones"
+                icon={<Database size={20} strokeWidth={1.75} />}
                 actions={
-                    <button className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase px-6 py-3 rounded-xl flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-500/20">
-                        <Plus className="w-4 h-4" /> Nuevo Lienzo
-                    </button>
+                    <Button onClick={() => setIsCreating(true)} size="sm">
+                        <Plus className="size-4" /> Nuevo diseño
+                    </Button>
                 }
             />
 
             <div className="flex-1 overflow-hidden flex flex-col">
-                <div className="px-10 py-6 border-b border-white/5 bg-black/20 flex items-center gap-6">
-                    <div className="relative group/search flex-1 max-w-xl">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-focus-within/search:text-blue-500 transition-colors" />
-                        <input
-                            type="text"
-                            placeholder="BUSCAR DISEÑOS..."
-                            className="w-full bg-[#111] border border-white/10 rounded-xl py-3.5 pl-12 pr-6 text-[10px] font-black uppercase tracking-widest outline-none focus:border-blue-500/50 transition-all"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                {/* Filters bar */}
+                <div className="px-6 py-3 border-b bg-card/30 flex items-center justify-between gap-4">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                        <Input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Buscar diseño…"
+                            className="h-9 pl-8"
                         />
                     </div>
                     <ViewToggler viewMode={viewMode} setViewMode={setViewMode} />
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
-                    {viewMode === 'grid' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                            {filtered.map((l) => (
-                                <motion.div
-                                    layout
-                                    key={l._id}
-                                    className="bg-[#111] border border-white/5 rounded-3xl overflow-hidden group hover:border-blue-500/30 transition-all shadow-2xl relative"
-                                >
-                                    <div className="aspect-[16/9] bg-black relative group/preview">
-                                        {/* Thumbnail Placeholder with Orientation */}
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20 transition-opacity group-hover/preview:opacity-40">
-                                            {l.orientation === 'portrait' ? <Smartphone className="w-20 h-20" /> : <Monitor className="w-24 h-24" />}
-                                            <span className="text-[10px] font-black uppercase tracking-[0.3em] mt-4">{l.orientation}</span>
-                                        </div>
-
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-
-                                        <div className="absolute top-4 right-4 flex gap-2">
-                                            <button
-                                                onClick={() => handleDuplicate(l)}
-                                                className="w-8 h-8 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-blue-400 hover:bg-blue-600 hover:text-white transition-all"
-                                                title="Duplicar"
-                                            >
-                                                <Copy className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(l._id)}
-                                                className="w-8 h-8 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-all"
-                                                title="Eliminar"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-
-                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity backdrop-blur-[2px] bg-blue-600/5">
-                                            <Link href={`/admin?id=${l._id}`}>
-                                                <button className="bg-white text-blue-600 font-black uppercase text-[10px] tracking-widest px-8 py-3 rounded-full shadow-2xl transform translate-y-4 group-hover/preview:translate-y-0 transition-all">
-                                                    Abrir en Editor
-                                                </button>
-                                            </Link>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-6">
-                                        <h3 className="text-sm font-black text-white uppercase italic tracking-tighter mb-2 truncate">{l.name}</h3>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                                <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">{l.widgets?.length || 0} Elementos</span>
+                <div className="flex-1 overflow-y-auto p-6">
+                    {filtered.length === 0 ? (
+                        <div className="grid place-items-center py-24 rounded-lg border border-dashed text-muted-foreground">
+                            <div className="text-center">
+                                <Database className="size-8 mx-auto mb-3 opacity-50" />
+                                <p className="text-[13px] font-medium mb-3">
+                                    {search ? 'Sin coincidencias' : 'Aún no tenés diseños guardados'}
+                                </p>
+                                {!search && (
+                                    <Button size="sm" variant="outline" onClick={() => setIsCreating(true)}>
+                                        <Plus className="size-3.5" /> Crear primer diseño
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    ) : viewMode === 'grid' ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            <AnimatePresence>
+                                {filtered.map((l) => (
+                                    <motion.div
+                                        key={l._id}
+                                        layout
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -8 }}
+                                    >
+                                        <Card className="overflow-hidden group hover:border-primary/40 transition-colors py-0 gap-0">
+                                            <div className="aspect-[16/9] bg-muted relative overflow-hidden">
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 group-hover:text-primary/40 transition-colors">
+                                                    {l.orientation === 'portrait'
+                                                        ? <Smartphone className="size-14" strokeWidth={1.25} />
+                                                        : <Monitor className="size-16" strokeWidth={1.25} />}
+                                                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] mt-2 opacity-70">
+                                                        {l.orientation || 'landscape'}
+                                                    </span>
+                                                </div>
+                                                <div className="absolute inset-0 bg-gradient-to-t from-card via-card/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center">
+                                                    <Link href={'/admin?id=' + l._id}>
+                                                        <Button size="sm" className="shadow-lg">
+                                                            <Edit3 className="size-3.5" /> Abrir editor
+                                                        </Button>
+                                                    </Link>
+                                                </div>
                                             </div>
-                                            <div className="h-3 w-[1px] bg-white/5" />
-                                            <span className="text-[9px] font-black text-neutral-600 uppercase tracking-widest">{new Date(l.updatedAt).toLocaleDateString()}</span>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            ))}
+
+                                            <CardContent className="p-4 flex items-start justify-between gap-2">
+                                                <div className="min-w-0 flex-1">
+                                                    <h3 className="font-heading text-[14px] font-semibold tracking-tight truncate">
+                                                        {l.name}
+                                                    </h3>
+                                                    <div className="flex items-center gap-2 mt-1.5">
+                                                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                                                            {(l.widgets?.length ?? 0)} widgets
+                                                        </Badge>
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                            {l.updatedAt ? new Date(l.updatedAt).toLocaleDateString() : '—'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger className="size-7 grid place-items-center rounded-md hover:bg-accent text-muted-foreground hover:text-foreground">
+                                                        <MoreHorizontal className="size-3.5" />
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => handleDuplicate(l)}>
+                                                            <Copy className="size-3.5 mr-2" /> Duplicar
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => setToDelete(l)}
+                                                            className="text-destructive focus:text-destructive"
+                                                        >
+                                                            <Trash2 className="size-3.5 mr-2" /> Eliminar
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </CardContent>
+                                        </Card>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
                         </div>
                     ) : (
-                        <div className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="border-b border-white/5 bg-white/5 text-[9px] font-black uppercase tracking-[0.2em] text-neutral-400">
-                                        <th className="p-4 pl-6">Nombre</th>
-                                        <th className="p-4">Orientación</th>
-                                        <th className="p-4">Resolución</th>
-                                        <th className="p-4">Elementos</th>
-                                        <th className="p-4">Creado</th>
-                                        <th className="p-4">Modificado</th>
-                                        <th className="p-4 pr-6 text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="text-xs font-medium text-neutral-300">
+                        <div className="rounded-lg border bg-card overflow-hidden">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Diseño</TableHead>
+                                        <TableHead>Formato</TableHead>
+                                        <TableHead className="text-center">Widgets</TableHead>
+                                        <TableHead>Modificado</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
                                     {filtered.map((l) => (
-                                        <tr key={l._id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                                            <td className="p-4 pl-6 font-bold text-white uppercase italic">{l.name}</td>
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-2">
-                                                    {l.orientation === 'portrait' ? <Smartphone className="w-4 h-4 text-blue-400" /> : <Monitor className="w-4 h-4 text-blue-400" />}
-                                                    <span className="text-[10px] font-black uppercase text-neutral-500">{l.orientation}</span>
+                                        <TableRow key={l._id} className="group">
+                                            <TableCell>
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="size-9 rounded-md bg-muted border grid place-items-center text-muted-foreground shrink-0">
+                                                        {l.orientation === 'portrait'
+                                                            ? <Smartphone className="size-4" />
+                                                            : <Monitor className="size-4" />}
+                                                    </div>
+                                                    <span className="font-medium truncate">{l.name}</span>
                                                 </div>
-                                            </td>
-                                            <td className="p-4 font-mono text-neutral-500 text-[10px]">
-                                                {l.orientation === 'portrait' ? '1080 x 1920' : '1920 x 1080'}
-                                            </td>
-                                            <td className="p-4">{l.widgets?.length || 0}</td>
-                                            <td className="p-4 text-[10px] uppercase text-neutral-500">{new Date(l.createdAt || Date.now()).toLocaleDateString()}</td>
-                                            <td className="p-4">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-white">{new Date(l.updatedAt).toLocaleDateString()}</span>
-                                                    <span className="text-[9px] text-neutral-600 uppercase tracking-wider">Por: {l.modifiedBy || 'Admin'}</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className="text-[10px]">
+                                                    {l.orientation === 'portrait' ? 'Vertical 9:16' : 'Horizontal 16:9'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-center font-mono text-[12px] tabular-nums">
+                                                {l.widgets?.length || 0}
+                                            </TableCell>
+                                            <TableCell className="text-[12px] text-muted-foreground">
+                                                {l.updatedAt ? new Date(l.updatedAt).toLocaleDateString() : '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                                                    <Link href={'/admin?id=' + l._id}>
+                                                        <Button size="sm" variant="ghost" className="size-8">
+                                                            <Edit3 className="size-3.5" />
+                                                        </Button>
+                                                    </Link>
+                                                    <Button size="sm" variant="ghost" className="size-8" onClick={() => handleDuplicate(l)}>
+                                                        <Copy className="size-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="size-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                        onClick={() => setToDelete(l)}
+                                                    >
+                                                        <Trash2 className="size-3.5" />
+                                                    </Button>
                                                 </div>
-                                            </td>
-                                            <td className="p-4 pr-6 text-right space-x-2 flex justify-end">
-                                                <Link href={`/admin?id=${l._id}`}>
-                                                    <button className="p-2 hover:bg-blue-600/20 rounded-lg transition-colors text-neutral-400 hover:text-blue-500" title="Editar">
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                </Link>
-                                                <button onClick={() => handleDuplicate(l)} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-neutral-400 hover:text-white" title="Duplicar">
-                                                    <Copy className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDelete(l._id)} className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-neutral-400 hover:text-red-500" title="Eliminar">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </td>
-                                        </tr>
+                                            </TableCell>
+                                        </TableRow>
                                     ))}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Create Dialog */}
+            <Dialog open={isCreating} onOpenChange={setIsCreating}>
+                <DialogContent className="sm:max-w-[480px]">
+                    <DialogHeader>
+                        <DialogTitle className="font-heading flex items-center gap-2">
+                            <span className="size-8 rounded-md grid place-items-center bg-primary/10 text-primary">
+                                <Plus className="size-4" />
+                            </span>
+                            Nuevo diseño
+                        </DialogTitle>
+                        <DialogDescription>
+                            Definí el formato del lienzo y un nombre descriptivo.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="layout-name">Nombre del diseño</Label>
+                            <Input
+                                id="layout-name"
+                                autoFocus
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                                placeholder="Ej. Menu principal restaurante"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>Orientación</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => setNewOrientation('landscape')}
+                                    className={'h-24 rounded-md border flex flex-col items-center justify-center gap-2 transition-colors ' + (
+                                        newOrientation === 'landscape'
+                                            ? 'bg-primary/10 border-primary text-primary'
+                                            : 'bg-card hover:bg-accent border-border text-muted-foreground'
+                                    )}
+                                >
+                                    <Monitor className="size-7" />
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide">Horizontal</span>
+                                </button>
+                                <button
+                                    onClick={() => setNewOrientation('portrait')}
+                                    className={'h-24 rounded-md border flex flex-col items-center justify-center gap-2 transition-colors ' + (
+                                        newOrientation === 'portrait'
+                                            ? 'bg-primary/10 border-primary text-primary'
+                                            : 'bg-card hover:bg-accent border-border text-muted-foreground'
+                                    )}
+                                >
+                                    <Smartphone className="size-7" />
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide">Vertical</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setIsCreating(false); setNewName(''); }}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleCreate} disabled={!newName.trim()}>
+                            Crear diseño
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete confirmation */}
+            <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar este diseño?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Se borrará permanentemente el diseño <b>{toDelete?.name}</b> y sus widgets.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Eliminar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <Toaster />
         </div>
     );
 }

@@ -4,7 +4,6 @@ import React, { useMemo, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { WidgetConfig, WidgetType } from '@/store/usePlayerStore';
 
-// Mapping component types to their dynamic imports
 const widgetMap: Record<WidgetType, any> = {
     VIDEO: dynamic(() => import('../widgets/VideoWidget'), { ssr: false }),
     PRICE_LIST: dynamic(() => import('../widgets/PriceListWidget'), { ssr: false }),
@@ -25,36 +24,58 @@ const widgetMap: Record<WidgetType, any> = {
     MUSIC_PLAYER: dynamic(() => import('../widgets/MusicPlayerWidget'), { ssr: false }),
 };
 
-interface WidgetRendererProps {
-    widget: WidgetConfig;
+interface WidgetRendererProps { widget: WidgetConfig; }
+
+class WidgetErrorBoundary extends React.Component<
+    { children: React.ReactNode; type: string },
+    { error: Error | null }
+> {
+    constructor(props: any) {
+        super(props);
+        this.state = { error: null };
+    }
+    static getDerivedStateFromError(error: Error) { return { error }; }
+    componentDidCatch(error: Error, info: any) {
+        // eslint-disable-next-line no-console
+        console.error('[Widget crash]' , this.props.type, error, info);
+    }
+    render() {
+        if (this.state.error) {
+            return (
+                <div className="w-full h-full grid place-items-center bg-destructive/10 border border-destructive/40 rounded-md text-destructive text-[11px] font-medium p-3 text-center">
+                    <div>
+                        <div className="font-bold uppercase tracking-wide mb-1">{this.props.type}</div>
+                        <div className="opacity-80">Widget no se pudo renderizar</div>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children as React.ReactElement;
+    }
 }
 
 const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget }) => {
-    const Component = useMemo(() => {
-        return widgetMap[widget.type] || null;
-    }, [widget.type]);
+    const Component = useMemo(() => widgetMap[widget.type] || null, [widget.type]);
 
     if (!Component) {
         return (
-            <div className="flex items-center justify-center w-full h-full bg-red-900/20 border border-red-500/50 rounded-lg p-4 text-xs text-red-400">
-                Unknown Widget Type: {widget.type}
+            <div className="flex items-center justify-center w-full h-full bg-destructive/10 border border-destructive/40 rounded-md p-3 text-xs text-destructive">
+                Tipo desconocido: {widget.type}
             </div>
         );
     }
 
-    // Calculate position and size based on widget config
-    // In a real grid system, these would be controlled by the grid-layout or absolute positioning
     return (
-        <div
-            className="w-full h-full overflow-hidden"
-        >
-            <Suspense fallback={
-                <div className="w-full h-full flex items-center justify-center animate-pulse bg-white/5 rounded-lg">
-                    <div className="w-4 h-4 rounded-full bg-blue-500/50" />
-                </div>
-            }>
-                <Component data={widget.data} />
-            </Suspense>
+        <div className="w-full h-full overflow-hidden">
+            <WidgetErrorBoundary type={widget.type}>
+                <Suspense fallback={
+                    <div className="w-full h-full grid place-items-center bg-muted/40 rounded-md">
+                        <div className="size-2 rounded-full bg-primary/70 animate-pulse" />
+                    </div>
+                }>
+                    <Component data={widget.data} />
+                </Suspense>
+            </WidgetErrorBoundary>
         </div>
     );
 };

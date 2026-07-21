@@ -193,9 +193,9 @@ nextApp.prepare().then(() => {
 
             res.cookie('token', token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
+                secure: process.env.COOKIE_SECURE === 'true',
                 maxAge: 24 * 60 * 60 * 1000, // 1 day
-                sameSite: 'strict'
+                sameSite: 'lax'
             });
 
             res.json({ user: { email: user.email } });
@@ -557,14 +557,32 @@ nextApp.prepare().then(() => {
 
     const io = new Server(server);
 
+    // Map socket.id -> screenId for presence tracking
+    const socketScreenMap = new Map();
+
+    // Helper: emit screens_list with computed presence to all admins
+    const broadcastScreens = async () => {
+        try {
+            const screens = await Screen.find();
+            io.emit('screens_list', screens);
+        } catch (e) {
+            console.error('broadcastScreens error:', e);
+        }
+    };
+
+    // Periodic presence broadcaster so admins see online/offline transitions
+    // without waiting for the next register/save event
+    setInterval(broadcastScreens, 5000);
+
     io.on('connection', (socket) => {
         // console.log('Client connected:', socket.id);
 
         // Register a screen to its own room
         socket.on('register_screen', async (data) => {
             try {
-                const { screenId } = data;
+                const { screenId, viewport, userAgent } = data || {};
                 socket.join(`screen_${screenId}`);
+                socketScreenMap.set(socket.id, screenId);
 
                 // Find or create screen
                 let screen = await Screen.findOne({ screenId });
@@ -572,8 +590,19 @@ nextApp.prepare().then(() => {
                     screen = await Screen.create({ screenId });
                 } else {
                     screen.lastSeen = Date.now();
-                    await screen.save();
                 }
+
+                if (viewport && typeof viewport === 'object') {
+                    screen.viewport = {
+                        width: Number(viewport.width) || 0,
+                        height: Number(viewport.height) || 0,
+                        orientation: viewport.orientation || (viewport.height > viewport.width ? 'portrait' : 'landscape'),
+                    };
+                }
+                if (userAgent && typeof userAgent === 'string') {
+                    screen.userAgent = userAgent;
+                }
+                await screen.save();
 
                 console.log(`Screen ${screenId} registered. Authorized: ${screen.isAuthorized}`);
 
@@ -759,8 +788,33 @@ nextApp.prepare().then(() => {
             }
         });
 
-        socket.on('disconnect', () => {
-            // console.log('Client disconnected:', socket.id);
+        // Heartbeat: player pings every 10s while alive. Updates lastSeen.
+        socket.on('heartbeat', async () => {
+            try {
+                const screenId = socketScreenMap.get(socket.id);
+                if (!screenId) return;
+                await Screen.findOneAndUpdate({ screenId }, { lastSeen: Date.now() });
+            } catch (e) {
+                console.error('heartbeat error:', e);
+            }
+        });
+
+        socket.on('disconnect', async () => {
+            const screenId = socketScreenMap.get(socket.id);
+            socketScreenMap.delete(socket.id);
+            if (!screenId) return;
+            try {
+                // Mark this screen as offline by setting lastSeen far in the past
+                // so the admin UI shows it as offline immediately. Real lastSeen is
+                // restored when the player reconnects via register_screen.
+                await Screen.findOneAndUpdate(
+                    { screenId },
+                    { lastSeen: new Date(Date.now() - 60 * 1000) }
+                );
+                broadcastScreens();
+            } catch (e) {
+                console.error('disconnect cleanup error:', e);
+            }
         });
     });
 
