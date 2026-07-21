@@ -6,6 +6,8 @@ const ActivitySchema = new mongoose.Schema({
     desc: { type: String },
     photo: { type: String },
     category: { type: String },
+    day: { type: String },
+    isWeekly: { type: Boolean, default: false },
     available: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now }

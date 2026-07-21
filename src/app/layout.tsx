@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ThemeProvider, ThemeScript } from "@/components/theme/ThemeProvider";
 
 export const metadata: Metadata = {
-    title: "PixelFlow Player",
+    title: "PixelFlow Studio",
     description: "Next Generation Digital Signage Platform",
     manifest: "/manifest.json",
     appleWebApp: {
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport = {
-    themeColor: "#000000",
+    themeColor: "#fafafa",
     width: "device-width",
     initialScale: 1,
     maximumScale: 1,
@@ -29,33 +30,28 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en">
-            <body className="bg-black">
-                {children}
+        <html lang="es" suppressHydrationWarning>
+            <head>
+                <ThemeScript defaultMode="light" />
+            </head>
+            <body>
+                <ThemeProvider defaultMode="light">
+                    {children}
+                </ThemeProvider>
                 <script
                     dangerouslySetInnerHTML={{
                         __html: `
-
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(registration) {
                     console.log('SW Registered with scope:', registration.scope);
-                    
-                    // Check for updates every 1 minute
-                    setInterval(() => {
-                      registration.update();
-                    }, 60000);
-
-                    // If a waiting worker exists, force it to update
+                    setInterval(() => { registration.update(); }, 60000);
                     if (registration.waiting) {
                         registration.waiting.postMessage({ type: 'SKIP_WAITING' });
                     }
-
                   }).catch(function(err) {
                     console.log('SW Registration Failed', err);
                   });
-
-                  // Force reload when new SW takes control
                   let refreshing = false;
                   navigator.serviceWorker.addEventListener('controllerchange', () => {
                     if (!refreshing) {
@@ -65,7 +61,6 @@ export default function RootLayout({
                   });
                 });
               }
-            
             `,
                     }}
                 />

@@ -52,7 +52,13 @@ export default function PlayerPage() {
             console.log('Socket Connected');
             setConnected(true);
             setScreenId(id as string);
-            socket.emit('register_screen', { screenId: id });
+            const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
+            const vh = typeof window !== 'undefined' ? window.innerHeight : 0;
+            socket.emit('register_screen', {
+                screenId: id,
+                viewport: { width: vw, height: vh, orientation: vh > vw ? 'portrait' : 'landscape' },
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+            });
         });
 
         socket.on('connect_error', (err) => {

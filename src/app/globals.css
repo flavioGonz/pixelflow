@@ -1,64 +1,516 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =============================================================================
+   PixelFlow Design Tokens — light default · .dark for dark mode
+   shadcn/ui tokens (--background, --foreground, etc.) are exposed via @theme inline.
+   PixelFlow custom tokens are namespaced --pf-* to avoid collisions.
+   Source of truth: design-system/MASTER.md
+   ============================================================================= */
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
+  /* shadcn light palette */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.4881 0.2173 264.5);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.4881 0.2173 264.5);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* PixelFlow brand tokens (light) */
+  --pf-bg: #fafafa;
+  --pf-bg-elevated: #ffffff;
+  --pf-bg-card: #ffffff;
+  --pf-bg-card-hover: #f4f4f5;
+  --pf-bg-input: #ffffff;
+  --pf-fg: #0a0a0a;
+  --pf-fg-muted: #52525b;
+  --pf-fg-subtle: #71717a;
+  --pf-border: #e4e4e7;
+  --pf-border-strong: #d4d4d8;
+  --pf-primary: #4f46e5;
+  --pf-primary-hover: #4338ca;
+  --pf-primary-fg: #ffffff;
+  --pf-accent: #059669;
+  --pf-warning: #d97706;
+  --pf-danger: #dc2626;
+  --pf-info: #0284c7;
+  --pf-ring: #4f46e5;
+
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 24px rgba(79, 70, 229, 0.25);
+
+  /* Typography */
+  --font-heading: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-body: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Fira Code', monospace;
+
+  /* Sidebar widths */
+  --sidebar-w-collapsed: 64px;
+  --sidebar-w-expanded: 224px;
+
+  color-scheme: light;
+}
+
+.dark {
+  /* shadcn dark palette */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.5854 0.2113 263.5);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.5854 0.2113 263.5);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  /* PixelFlow brand tokens (dark) */
+  --pf-bg: #050505;
+  --pf-bg-elevated: #0a0a0a;
+  --pf-bg-card: #111114;
+  --pf-bg-card-hover: #16161a;
+  --pf-bg-input: #0d0d10;
+  --pf-fg: #fafafa;
+  --pf-fg-muted: #a1a1aa;
+  --pf-fg-subtle: #71717a;
+  --pf-border: rgba(255, 255, 255, 0.06);
+  --pf-border-strong: rgba(255, 255, 255, 0.12);
+  --pf-primary: #6366f1;
+  --pf-primary-hover: #4f46e5;
+  --pf-primary-fg: #ffffff;
+  --pf-accent: #10b981;
+  --pf-warning: #f59e0b;
+  --pf-danger: #ef4444;
+  --pf-info: #0ea5e9;
+  --pf-ring: #6366f1;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.35);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+/* =============================================================================
+   Base
+   ============================================================================= */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+html, body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: black;
-  margin: 0;
   overflow: hidden;
-  font-feature-settings: "ss01", "ss02", "cv01", "cv02";
-  -webkit-font-smoothing: antialiased;
-  /* PWA Optimizations */
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: pan-x pan-y;
   overscroll-behavior: none;
 }
 
-/* Custom Lean Scrollbar */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 10px;
+.font-mono {
+  font-family: var(--font-mono);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
+/* =============================================================================
+   Utilities
+   ============================================================================= */
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.custom-scrollbar-hidden {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.custom-scrollbar-hidden::-webkit-scrollbar {
-  display: none;
-}
-
-/* Glassmorphism primitives */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--pf-bg-card);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--pf-border);
 }
 
-/* Smooth transitions */
-* {
-  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
+.glass-panel-strong {
+  background: color-mix(in srgb, var(--pf-bg-card) 80%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--pf-border-strong);
 }
+
+/* Scrollbars */
+.custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--pf-border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--pf-fg-subtle);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+.custom-scrollbar-hidden { scrollbar-width: none; -ms-overflow-style: none; }
+.custom-scrollbar-hidden::-webkit-scrollbar { display: none; }
+
+/* =============================================================================
+   Animations
+   ============================================================================= */
+
+@keyframes pf-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.6; transform: scale(0.92); }
+}
+
+.pf-pulse-dot {
+  animation: pf-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =============================================================================
+   Bento grid helpers
+   ============================================================================= */
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+.bento-1x1 { grid-column: span 3; min-height: 160px; }
+.bento-2x1 { grid-column: span 6; min-height: 160px; }
+.bento-2x2 { grid-column: span 6; min-height: 336px; }
+.bento-3x1 { grid-column: span 9; min-height: 160px; }
+.bento-full { grid-column: span 12; }
+
+@media (max-width: 1024px) {
+  .bento-1x1, .bento-2x1, .bento-2x2, .bento-3x1 { grid-column: span 6; }
+}
+@media (max-width: 640px) {
+  .bento-1x1, .bento-2x1, .bento-2x2, .bento-3x1 { grid-column: span 12; }
+}
+
+/* =============================================================================
+   FullCalendar theme integration
+   ============================================================================= */
+
+.fc {
+  --fc-page-bg-color: var(--pf-bg);
+  --fc-neutral-bg-color: var(--pf-bg-elevated);
+  --fc-neutral-text-color: var(--pf-fg-muted);
+  --fc-border-color: var(--pf-border);
+  --fc-button-bg-color: var(--pf-bg-card);
+  --fc-button-border-color: var(--pf-border-strong);
+  --fc-button-text-color: var(--pf-fg);
+  --fc-button-hover-bg-color: var(--pf-bg-card-hover);
+  --fc-button-hover-border-color: var(--pf-border-strong);
+  --fc-button-active-bg-color: var(--pf-primary);
+  --fc-button-active-border-color: var(--pf-primary);
+  --fc-today-bg-color: color-mix(in srgb, var(--pf-primary) 8%, transparent);
+  --fc-event-bg-color: var(--pf-primary);
+  --fc-event-border-color: var(--pf-primary);
+  --fc-event-text-color: var(--pf-primary-fg);
+  font-family: var(--font-body);
+}
+.fc .fc-toolbar-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--pf-fg);
+}
+.fc .fc-button {
+  border-radius: 8px;
+  font-weight: 500;
+  text-transform: none;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.fc .fc-event {
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.fc-theme-standard td, .fc-theme-standard th { border-color: var(--pf-border); }
+.fc .fc-col-header-cell-cushion { color: var(--pf-fg-muted); font-weight: 600; }
+.fc .fc-daygrid-day-number { color: var(--pf-fg-muted); padding: 6px 8px; }
+.fc .fc-day-today .fc-daygrid-day-number { color: var(--pf-primary); font-weight: 700; }
+
+/* =============================================================================
+   Theme transition (smooth swap between dark/light)
+   ============================================================================= */
+
+html.pf-theme-transition,
+html.pf-theme-transition *,
+html.pf-theme-transition *::before,
+html.pf-theme-transition *::after {
+  transition: background-color 200ms ease,
+              border-color 200ms ease,
+              color 200ms ease,
+              fill 200ms ease,
+              stroke 200ms ease !important;
+  transition-delay: 0 !important;
+}
+
+
+/* =============================================================================
+   Theme adapter — remap legacy hardcoded dark utilities when NOT in .dark.
+   Uses flat selectors (no CSS nesting) to ensure broad compatibility.
+   ============================================================================= */
+
+html:not(.dark) .bg-black,
+html:not(.dark) .bg-\[\#000\],
+html:not(.dark) .bg-\[\#000000\] { background-color: #ffffff !important; }
+
+html:not(.dark) .bg-\[\#050505\],
+html:not(.dark) .bg-\[\#080808\],
+html:not(.dark) .bg-\[\#0a0a0a\],
+html:not(.dark) .bg-\[\#0f0f0f\] { background-color: #fafafa !important; }
+
+html:not(.dark) .bg-\[\#111\],
+html:not(.dark) .bg-\[\#111111\],
+html:not(.dark) .bg-\[\#161616\],
+html:not(.dark) .bg-\[\#1a1a1a\],
+html:not(.dark) .bg-\[\#111114\] { background-color: #ffffff !important; }
+
+html:not(.dark) .bg-neutral-950,
+html:not(.dark) .bg-zinc-950,
+html:not(.dark) .bg-stone-950,
+html:not(.dark) .bg-slate-950,
+html:not(.dark) .bg-gray-950 { background-color: #fafafa !important; }
+
+html:not(.dark) .bg-neutral-900,
+html:not(.dark) .bg-zinc-900,
+html:not(.dark) .bg-stone-900,
+html:not(.dark) .bg-slate-900,
+html:not(.dark) .bg-gray-900 { background-color: #ffffff !important; }
+
+html:not(.dark) .bg-neutral-800,
+html:not(.dark) .bg-zinc-800,
+html:not(.dark) .bg-stone-800,
+html:not(.dark) .bg-slate-800,
+html:not(.dark) .bg-gray-800 { background-color: #f4f4f5 !important; }
+
+html:not(.dark) .bg-neutral-700,
+html:not(.dark) .bg-zinc-700 { background-color: #e4e4e7 !important; }
+
+html:not(.dark) .bg-neutral-900\/40,
+html:not(.dark) .bg-neutral-900\/50,
+html:not(.dark) .bg-neutral-900\/80,
+html:not(.dark) .bg-neutral-800\/50,
+html:not(.dark) .bg-neutral-800\/80,
+html:not(.dark) .bg-zinc-900\/50,
+html:not(.dark) .bg-zinc-900\/80,
+html:not(.dark) .bg-black\/40,
+html:not(.dark) .bg-black\/50,
+html:not(.dark) .bg-black\/60,
+html:not(.dark) .bg-black\/80 { background-color: rgba(0, 0, 0, 0.04) !important; }
+
+html:not(.dark) .bg-black\/20,
+html:not(.dark) .bg-black\/30 { background-color: rgba(0, 0, 0, 0.02) !important; }
+
+html:not(.dark) .bg-white\/5,
+html:not(.dark) .bg-white\/10,
+html:not(.dark) .bg-white\/\[0\.01\],
+html:not(.dark) .bg-white\/\[0\.02\],
+html:not(.dark) .bg-white\/\[0\.03\],
+html:not(.dark) .bg-white\/\[0\.05\] { background-color: rgba(0, 0, 0, 0.04) !important; }
+
+html:not(.dark) .bg-white\/20,
+html:not(.dark) .bg-white\/30 { background-color: rgba(0, 0, 0, 0.06) !important; }
+
+html:not(.dark) .hover\:bg-white\/5:hover,
+html:not(.dark) .hover\:bg-white\/10:hover,
+html:not(.dark) .hover\:bg-white\/20:hover { background-color: rgba(0, 0, 0, 0.06) !important; }
+
+html:not(.dark) .hover\:bg-\[\#1a1a1a\]:hover,
+html:not(.dark) .hover\:bg-\[\#111\]:hover,
+html:not(.dark) .hover\:bg-\[\#0a0a0a\]:hover { background-color: #f4f4f5 !important; }
+
+html:not(.dark) .hover\:bg-neutral-900:hover,
+html:not(.dark) .hover\:bg-neutral-800:hover,
+html:not(.dark) .hover\:bg-zinc-900:hover,
+html:not(.dark) .hover\:bg-zinc-800:hover { background-color: #f4f4f5 !important; }
+
+/* Text */
+html:not(.dark) .text-white,
+html:not(.dark) .text-neutral-50,
+html:not(.dark) .text-neutral-100,
+html:not(.dark) .text-zinc-50,
+html:not(.dark) .text-zinc-100,
+html:not(.dark) .text-stone-50,
+html:not(.dark) .text-stone-100 { color: #0a0a0a !important; }
+
+html:not(.dark) .text-neutral-200,
+html:not(.dark) .text-neutral-300,
+html:not(.dark) .text-zinc-200,
+html:not(.dark) .text-zinc-300,
+html:not(.dark) .text-gray-200,
+html:not(.dark) .text-gray-300 { color: #18181b !important; }
+
+html:not(.dark) .text-neutral-400,
+html:not(.dark) .text-zinc-400,
+html:not(.dark) .text-gray-400,
+html:not(.dark) .text-stone-400 { color: #3f3f46 !important; }
+
+html:not(.dark) .text-neutral-500,
+html:not(.dark) .text-zinc-500,
+html:not(.dark) .text-gray-500,
+html:not(.dark) .text-stone-500 { color: #52525b !important; }
+
+html:not(.dark) .text-neutral-600,
+html:not(.dark) .text-zinc-600,
+html:not(.dark) .text-gray-600,
+html:not(.dark) .text-stone-600 { color: #71717a !important; }
+
+html:not(.dark) .text-neutral-700,
+html:not(.dark) .text-zinc-700,
+html:not(.dark) .text-gray-700,
+html:not(.dark) .text-stone-700 { color: #a1a1aa !important; }
+
+html:not(.dark) .text-neutral-800,
+html:not(.dark) .text-zinc-800,
+html:not(.dark) .text-gray-800,
+html:not(.dark) .text-stone-800 { color: #71717a !important; }
+
+html:not(.dark) .hover\:text-white:hover,
+html:not(.dark) .hover\:text-neutral-100:hover,
+html:not(.dark) .hover\:text-zinc-100:hover { color: #0a0a0a !important; }
+
+/* Borders */
+html:not(.dark) .border-white\/5,
+html:not(.dark) .border-white\/10,
+html:not(.dark) .border-white\/20,
+html:not(.dark) .border-white\/30,
+html:not(.dark) .border-white\/40,
+html:not(.dark) .border-white\/50,
+html:not(.dark) .border-white\/60,
+html:not(.dark) .border-neutral-800,
+html:not(.dark) .border-neutral-700,
+html:not(.dark) .border-neutral-900,
+html:not(.dark) .border-zinc-800,
+html:not(.dark) .border-zinc-700,
+html:not(.dark) .border-zinc-900,
+html:not(.dark) .border-gray-800,
+html:not(.dark) .border-gray-700 { border-color: #e4e4e7 !important; }
+
+html:not(.dark) .hover\:border-white\/10:hover,
+html:not(.dark) .hover\:border-white\/20:hover,
+html:not(.dark) .hover\:border-white\/30:hover,
+html:not(.dark) .hover\:border-neutral-700:hover { border-color: #d4d4d8 !important; }
+
+/* Shadows that produce dark halos around panels — tone them down */
+html:not(.dark) .shadow-\[0_0_100px_rgba\(0\,0\,0\,0\.5\)\] { box-shadow: 0 0 60px rgba(0,0,0,0.08) !important; }

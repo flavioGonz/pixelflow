@@ -17,20 +17,41 @@ import { ImageUpload } from '@/components/builder/ImageUpload';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { useEditorShortcuts } from '@/hooks/useEditorShortcuts';
+import { WidgetPalette } from '@/components/builder/WidgetPalette';
+import { FloatingToolbar } from '@/components/builder/FloatingToolbar';
+import { StatusBar } from '@/components/builder/StatusBar';
+import { FloatingDock } from '@/components/builder/FloatingDock';
+import { FloatingRightDock } from '@/components/builder/FloatingRightDock';
+import X from 'lucide-react/dist/esm/icons/x';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 
 
 let socket: Socket;
 
-export default function AdminDashboard() {
+export default function AdminDashboardPage() {
+    return (
+        <React.Suspense fallback={<div className="flex-1 grid place-items-center text-muted-foreground">Cargando Studio…</div>}>
+            <AdminDashboard />
+        </React.Suspense>
+    );
+}
+
+function AdminDashboard() {
     const [screenId, setScreenId] = useState('pantalla-1');
     const [layoutName, setLayoutName] = useState('Mi Primer Layout');
     const [widgets, setWidgets] = useState<WidgetConfig[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
     const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
+    const [resolution, setResolution] = useState<{ width: number; height: number }>({ width: 1920, height: 1080 });
     const [backgroundImage, setBackgroundImage] = useState('');
     const [backgroundVideo, setBackgroundVideo] = useState('');
-    const [backgroundColor, setBackgroundColor] = useState('#000000');
+    const [backgroundColor, setBackgroundColor] = useState('#ffffff');
     const [backgroundBlur, setBackgroundBlur] = useState(0);
     const [backgroundOverlayColor, setBackgroundOverlayColor] = useState('#000000');
     const [backgroundOverlayOpacity, setBackgroundOverlayOpacity] = useState(0.5);
@@ -40,11 +61,131 @@ export default function AdminDashboard() {
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [layoutToDelete, setLayoutToDelete] = useState<any>(null);
     const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-    const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+    const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
 
     const router = useRouter();
     const searchParams = useSearchParams();
     const layoutIdParam = searchParams.get('id');
+
+    // -------- Undo/Redo --------
+    const historyPastRef = React.useRef<WidgetConfig[][]>([]);
+    const historyFutureRef = React.useRef<WidgetConfig[][]>([]);
+    const lastCommittedRef = React.useRef<WidgetConfig[]>([]);
+
+    const commitHistory = useCallback(() => {
+        const snap = JSON.parse(JSON.stringify(widgets));
+        if (JSON.stringify(lastCommittedRef.current) === JSON.stringify(snap)) return;
+        historyPastRef.current = [...historyPastRef.current, lastCommittedRef.current].slice(-50);
+        historyFutureRef.current = [];
+        lastCommittedRef.current = snap;
+    }, [widgets]);
+
+    const setWidgetsWithHistory = useCallback(
+        (next: WidgetConfig[] | ((p: WidgetConfig[]) => WidgetConfig[]), opts?: { skipHistory?: boolean }) => {
+            setWidgets((prev) => {
+                const value = typeof next === 'function' ? (next as any)(prev) : next;
+                if (!opts?.skipHistory) {
+                    historyPastRef.current = [...historyPastRef.current, lastCommittedRef.current].slice(-50);
+                    historyFutureRef.current = [];
+                    lastCommittedRef.current = JSON.parse(JSON.stringify(value));
+                }
+                return value;
+            });
+        }, []);
+
+    const undo = useCallback(() => {
+        if (historyPastRef.current.length === 0) return;
+        const previous = historyPastRef.current[historyPastRef.current.length - 1];
+        historyPastRef.current = historyPastRef.current.slice(0, -1);
+        setWidgets((current) => {
+            historyFutureRef.current = [JSON.parse(JSON.stringify(current)), ...historyFutureRef.current].slice(0, 50);
+            lastCommittedRef.current = JSON.parse(JSON.stringify(previous));
+            return JSON.parse(JSON.stringify(previous));
+        });
+    }, []);
+
+    const redo = useCallback(() => {
+        if (historyFutureRef.current.length === 0) return;
+        const next = historyFutureRef.current[0];
+        historyFutureRef.current = historyFutureRef.current.slice(1);
+        setWidgets((current) => {
+            historyPastRef.current = [...historyPastRef.current, JSON.parse(JSON.stringify(current))].slice(-50);
+            lastCommittedRef.current = JSON.parse(JSON.stringify(next));
+            return JSON.parse(JSON.stringify(next));
+        });
+    }, []);
+
+    React.useEffect(() => {
+        if (lastCommittedRef.current.length === 0 && widgets.length > 0) {
+            lastCommittedRef.current = JSON.parse(JSON.stringify(widgets));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [widgets.length]);
+
+    const nudge = useCallback((dx: number, dy: number) => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.map((w) => w.id === selectedWidgetId
+            ? { ...w, x: Math.max(0, Math.min(100 - w.w, w.x + dx)), y: Math.max(0, Math.min(100 - w.h, w.y + dy)) } : w));
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const deleteSelected = useCallback(() => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.filter((w) => w.id !== selectedWidgetId));
+        setSelectedWidgetId(null);
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const duplicateSelected = useCallback(() => {
+        if (!selectedWidgetId) return;
+        const src = widgets.find((w) => w.id === selectedWidgetId);
+        if (!src) return;
+        const copy: WidgetConfig = {
+            ...JSON.parse(JSON.stringify(src)),
+            id: 'w-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+            x: Math.min(100 - src.w, src.x + 2),
+            y: Math.min(100 - src.h, src.y + 2),
+        };
+        setWidgetsWithHistory((prev) => [...prev, copy]);
+        setSelectedWidgetId(copy.id);
+    }, [selectedWidgetId, widgets, setWidgetsWithHistory]);
+
+    const bringForward = useCallback(() => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.map((w) => w.id === selectedWidgetId ? { ...w, zIndex: (w.zIndex || 1) + 1 } : w));
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const sendBackward = useCallback(() => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.map((w) => w.id === selectedWidgetId ? { ...w, zIndex: Math.max(1, (w.zIndex || 1) - 1) } : w));
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const alignToCanvas = useCallback((axis: 'left'|'center-h'|'right'|'top'|'center-v'|'bottom') => {
+        if (!selectedWidgetId) return;
+        setWidgetsWithHistory((prev) => prev.map((w) => {
+            if (w.id !== selectedWidgetId) return w;
+            let { x, y } = w;
+            if (axis === 'left') x = 0;
+            if (axis === 'center-h') x = (100 - w.w) / 2;
+            if (axis === 'right') x = 100 - w.w;
+            if (axis === 'top') y = 0;
+            if (axis === 'center-v') y = (100 - w.h) / 2;
+            if (axis === 'bottom') y = 100 - w.h;
+            return { ...w, x, y };
+        }));
+    }, [selectedWidgetId, setWidgetsWithHistory]);
+
+    const canvasContainerRef = React.useRef<HTMLDivElement>(null);
+
+    useEditorShortcuts({
+        selectedId: selectedWidgetId,
+        onNudge: nudge,
+        onDelete: deleteSelected,
+        onDuplicate: duplicateSelected,
+        onUndo: undo,
+        onRedo: redo,
+        onBringForward: bringForward,
+        onSendBackward: sendBackward,
+        onDeselect: () => setSelectedWidgetId(null),
+    });
 
     // DB States
     const [savedLayouts, setSavedLayouts] = useState<any[]>([]);
@@ -130,15 +271,17 @@ export default function AdminDashboard() {
         }));
     }, [allProducts, allActivities, allCategories]);
 
-    const addWidget = (type: WidgetType) => {
+    const addWidget = (type: WidgetType | string, opts?: { x?: number; y?: number }) => {
         const newWidget: WidgetConfig = {
             id: Math.random().toString(36).substr(2, 9),
-            type,
-            x: 10, y: 10, w: 30, h: 30,
+            type: type as WidgetType,
+            x: opts?.x ?? 10,
+            y: opts?.y ?? 10,
+            w: 30, h: 30,
             zIndex: 1,
-            data: getDefaultData(type),
+            data: getDefaultData(type as WidgetType),
         };
-        setWidgets([...widgets, newWidget]);
+        setWidgetsWithHistory((prev) => [...prev, newWidget]);
         setSelectedWidgetId(newWidget.id);
     };
 
@@ -252,6 +395,10 @@ export default function AdminDashboard() {
                 cover: '',
                 accentColor: '#10b981'
             };
+            case 'ATMOSPHERE': return {
+                preset: 'sunset',
+                intensity: 0.5,
+            };
             case 'DATE_TIME': return {
                 style: 'MODERN'
             };
@@ -274,48 +421,34 @@ export default function AdminDashboard() {
     };
 
     const pushOnly = () => {
+        if (!screenId) { toast.error('Seleccioná un monitor de destino primero.'); return; }
         const layout: LayoutJSON = {
-            id: 'preview',
-            name: layoutName,
-            orientation,
-            widgets,
-            backgroundColor,
-            backgroundImage,
-            backgroundVideo,
-            backgroundBlur,
-            backgroundOverlayColor,
-            backgroundOverlayOpacity,
-            backgroundPattern,
-            backgroundPatternOpacity,
+            id: 'preview', name: layoutName, orientation, widgets,
+            backgroundColor, backgroundImage, backgroundVideo, backgroundBlur,
+            backgroundOverlayColor, backgroundOverlayOpacity,
+            backgroundPattern, backgroundPatternOpacity,
         };
         socket.emit('update_content', { screenId, layout });
+        toast.success('Vista previa enviada a ' + screenId);
     };
 
     const saveLayout = (isNew: boolean = false) => {
-        if (!confirm(`¿Guardar layout con orientación ${orientation.toUpperCase()}?`)) return;
+        if (!layoutName || !layoutName.trim()) {
+            toast.error('Asigná un nombre al diseño antes de guardarlo.');
+            return;
+        }
         const isExisting = !isNew && editingLayoutId;
         const layout: any = {
-            name: layoutName,
-            orientation,
-            widgets,
-            backgroundColor,
-            backgroundImage,
-            backgroundVideo,
-            backgroundBlur,
-            backgroundOverlayColor,
-            backgroundOverlayOpacity,
-            backgroundPattern,
-            backgroundPatternOpacity,
+            name: layoutName, orientation, widgets,
+            backgroundColor, backgroundImage, backgroundVideo, backgroundBlur,
+            backgroundOverlayColor, backgroundOverlayOpacity,
+            backgroundPattern, backgroundPatternOpacity,
         };
-        // Include _id for existing layouts so the backend uses findByIdAndUpdate
-        if (isExisting) {
-            layout._id = editingLayoutId;
-        }
+        if (isExisting) layout._id = editingLayoutId;
         socket.emit('save_layout', { screenId, layout });
-        // Force refresh layouts list after a small delay to ensure DB persistence
-        setTimeout(() => {
-            fetchLayouts();
-        }, 500);
+        toast.success(isExisting ? 'Diseño actualizado' : 'Diseño guardado',
+            { description: layoutName + ' · ' + orientation });
+        setTimeout(() => fetchLayouts(), 500);
     };
 
     const saveAndPush = () => {
@@ -360,226 +493,66 @@ export default function AdminDashboard() {
     };
 
     return (
-        <div className="h-screen bg-[#050505] text-neutral-100 flex flex-col font-sans selection:bg-blue-500/30">
-            {/* Professional Glass Header */}
-            <header className="h-20 border-b border-white/5 px-10 flex items-center justify-between bg-black/40 backdrop-blur-2xl sticky top-0 z-[100]">
-                <div className="flex items-center gap-6">
-                    <Link href="/">
-                        <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-white/10 text-white font-bold uppercase border border-white/5 shadow-lg active:scale-95 transition-transform text-xs">
-                            <ArrowLeft className="w-4 h-4" /> Volver
-                        </button>
-                    </Link>
-                    <button
-                        onClick={async () => {
-                            await fetch('/api/auth/logout', { method: 'POST' });
-                            router.push('/login');
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white font-bold uppercase border border-red-500/20 shadow-lg active:scale-95 transition-all text-xs"
-                    >
-                        <LogOut className="w-4 h-4" /> Cerrar Sesión
-                    </button>
-                    <div className="h-8 w-[1px] bg-white/10" />
-                    <motion.div
-                        initial={{ rotate: -10 }}
-                        animate={{ rotate: 0 }}
-                        className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-md flex items-center justify-center shadow-2xl shadow-blue-600/40 relative group"
-                    >
-                        <Zap className="w-7 h-7 text-white group-hover:scale-110 transition-transform" />
-                        <div className="absolute inset-0 bg-white/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </motion.div>
-                    <div className="flex-shrink-0">
-                        <div className="flex items-center gap-4">
-                            <div>
-                                <h1 className="text-xl font-black tracking-tighter uppercase flex items-center gap-2">
-                                    PixelFlow <span className="text-blue-500">Studio</span>
-                                    <span className="bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/20 ml-2">v2.0 PRO</span>
-                                </h1>
-                                <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.2em] mt-0.5">Digital Signage Control Center</p>
-                            </div>
+        <div className="flex-1 flex flex-col min-h-0 font-sans bg-background text-foreground relative">
 
-                            <div className="h-10 w-[1px] bg-white/5 mx-2" />
-
-                            <div className="flex flex-col">
-                                <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                                    <LayoutIcon className="w-3 h-3 text-blue-500" /> Diseño Activo
-                                </label>
-                                <div className="relative group/lay">
-                                    <select
-                                        className="bg-[#111] border border-white/5 rounded-xl px-4 py-2.5 text-[11px] font-black italic text-blue-400 outline-none focus:border-blue-500/50 min-w-[200px] appearance-none pr-10 cursor-pointer hover:bg-[#1a1a1a] transition-all shadow-2xl hover:border-white/10"
-                                        value={savedLayouts.find(l => l.name === layoutName)?._id || ''}
-                                        onChange={(e) => {
-                                            const layout = savedLayouts.find(l => l._id === e.target.value);
-                                            if (layout) loadLayout(layout);
-                                        }}
-                                    >
-                                        <option value="" className="bg-[#0a0a0a]">Seleccionar Diseño...</option>
-                                        {savedLayouts.map(l => (
-                                            <option key={l._id} value={l._id} className="bg-[#0a0a0a] text-white py-2">{l.name.toUpperCase()}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-hover/lay:text-blue-500 transition-colors pointer-events-none" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                    {/* Monitor Selector Dropdown */}
-                    <div className="flex flex-col">
-                        <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                            <Smartphone className="w-3 h-3 text-blue-500" /> Monitor de Destino
-                        </label>
-                        <div className="flex items-center gap-2">
-                            <div className="relative group/mon">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <div className={`w-1.5 h-1.5 rounded-full ${screens.find(s => s.screenId === screenId) && (Date.now() - new Date(screens.find(s => s.screenId === screenId).lastSeen).getTime() < 15000) ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-red-500'}`} />
-                                </div>
-                                <select
-                                    className="bg-[#111] border border-white/5 rounded-xl pl-9 pr-10 py-2.5 text-[11px] font-black italic text-blue-400 outline-none focus:border-blue-500/50 min-w-[240px] appearance-none cursor-pointer hover:bg-[#1a1a1a] transition-all shadow-2xl hover:border-white/10"
-                                    value={screenId}
-                                    onChange={(e) => setScreenId(e.target.value)}
-                                >
-                                    {screens.length === 0 ? (
-                                        <option value="pantalla-1" className="bg-[#0a0a0a]">Configurando pantallas...</option>
-                                    ) : (
-                                        screens.map(s => {
-                                            const isOnline = Date.now() - new Date(s.lastSeen).getTime() < 15000;
-                                            return (
-                                                <option key={s.screenId} value={s.screenId} className="bg-[#0a0a0a] text-white py-2">
-                                                    {isOnline ? '●' : '○'} {s.name || s.screenId.toUpperCase()} {s.screenId === screenId ? ' (TARGET)' : ''}
-                                                </option>
-                                            );
-                                        })
-                                    )}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-hover/mon:text-blue-500 transition-colors pointer-events-none" />
-                            </div>
-
-                            <button
-                                onClick={() => {
-                                    const url = `${window.location.origin}/player/${screenId}`;
-                                    navigator.clipboard.writeText(url);
-                                    const btn = document.getElementById('copy-url-btn');
-                                    if (btn) {
-                                        btn.innerHTML = '<span class="text-emerald-500 text-[10px] font-black italic">COPIADO!</span>';
-                                        setTimeout(() => {
-                                            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link w-4 h-4"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>';
-                                        }, 2000);
-                                    }
-                                }}
-                                id="copy-url-btn"
-                                className="w-10 h-10 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/30 rounded-xl flex items-center justify-center text-neutral-500 hover:text-blue-500 transition-all active:scale-90 shadow-lg"
-                                title="Copiar URL del Monitor"
-                            >
-                                <LinkIcon className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="h-8 w-[1px] bg-white/10" />
-
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={pushOnly}
-                            className="bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white text-[11px] font-black uppercase px-5 py-3 rounded-md transition-all flex items-center gap-2 border border-white/5"
-                        >
-                            <Eye className="w-4 h-4" /> Preview
-                        </button>
-
-                        <button
-                            onClick={saveAndPush}
-                            className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black uppercase px-8 py-3 rounded-md flex items-center gap-2 transition-all active:scale-95 shadow-xl shadow-blue-600/30 hover:shadow-blue-600/40"
-                        >
-                            <Zap className="w-4 h-4" /> {editingLayoutId ? 'Actualizar' : 'Publicar'}
-                        </button>
-
-                        {editingLayoutId && (
-                            <button
-                                onClick={() => saveLayout(true)}
-                                className="bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white text-[11px] font-black uppercase px-5 py-3 rounded-md transition-all flex items-center gap-2 border border-white/5"
-                            >
-                                <Plus className="w-4 h-4" /> Guardar Nuevo
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </header>
 
             <div className="flex flex-1 overflow-hidden">
-                {/* Widgets Sidebar */}
-                <motion.aside
-                    initial={false}
-                    animate={{
-                        width: leftSidebarOpen ? 300 : 0,
-                        opacity: leftSidebarOpen ? 1 : 0
+                {/* Widget palette — floating pill rail (left) */}
+                <WidgetPalette onAdd={addWidget} variant="floating" />
+
+                {/* Top floating dock with all controls */}
+                <FloatingDock
+                    layouts={savedLayouts}
+                    activeLayoutId={savedLayouts.find(l => l.name === layoutName)?._id || ''}
+                    onLayoutChange={(id) => { const l = savedLayouts.find(x => x._id === id); if (l) loadLayout(l); }}
+                    layoutName={layoutName}
+                    screens={screens}
+                    screenId={screenId}
+                    onScreenChange={setScreenId}
+                    onPreview={pushOnly}
+                    onPublish={saveAndPush}
+                    onCopyUrl={async () => {
+                        if (!screenId) { toast.error('Seleccioná un monitor primero.'); return; }
+                        const url = window.location.origin + '/player/' + screenId;
+                        const ok = await copyToClipboard(url);
+                        if (ok) toast.success('URL copiada', { description: url });
+                        else toast.error('No se pudo copiar', { description: url });
                     }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                    className="bg-[#080808] border-r border-white/5 flex flex-col overflow-hidden relative group/sidebar"
-                >
-                    {/* Toggle Button Left */}
-                    <button
-                        onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-                        className={`absolute top-1/2 -right-4 -translate-y-1/2 z-[60] w-8 h-16 bg-[#080808] border border-white/10 rounded-r-xl flex items-center justify-center text-neutral-500 hover:text-blue-500 transition-all shadow-2xl opacity-0 group-hover/sidebar:opacity-100 ${!leftSidebarOpen ? 'opacity-100 !-right-10 rounded-l-none' : ''}`}
-                    >
-                        {leftSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-                    </button>
+                    onUndo={undo}
+                    onRedo={redo}
+                    isEditing={!!editingLayoutId}
+                />
 
-                    <div className="flex-1 overflow-y-auto px-6 pt-8 pb-10 space-y-10 custom-scrollbar min-w-[300px]">
-                        <div className="space-y-6">
-                            <div className="sticky top-0 z-20 bg-[#080808] pb-6">
-                                <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em] flex items-center gap-2">
-                                    <Sparkles className="w-3 h-3" /> Biblioteca de Componentes
-                                </h2>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4 pb-20">
-                                {[
-                                    { type: 'TEXT', label: 'Texto Dinámico', desc: 'Títulos y párrafos.', color: 'from-blue-500 to-indigo-600', icon: 'T' },
-                                    { type: 'VIDEO', label: 'Video', desc: 'Fondos animados.', color: 'from-red-500 to-orange-600', icon: 'V' },
-                                    { type: 'SLIDER', label: 'Galería', desc: 'Carrusel fotos/videos.', color: 'from-emerald-500 to-teal-600', icon: 'S' },
-                                    { type: 'PRODUCT_LIST', label: 'Carta', desc: 'Menú productos.', color: 'from-amber-500 to-yellow-600', icon: 'P' },
-                                    { type: 'ACTIVITIES', label: 'Agenda', desc: 'Eventos del día.', color: 'from-purple-500 to-pink-600', icon: 'A' },
-                                    { type: 'DATE_TIME', label: 'Fecha/Hora', desc: 'Reloj digital.', color: 'from-emerald-400 to-cyan-500', icon: <Clock className="w-4 h-4" /> },
-                                    { type: 'QR_CODE', label: 'QR', desc: 'Enlace escaneable.', color: 'from-neutral-500 to-neutral-700', icon: 'Q' },
-                                    { type: 'CATEGORY_NAV', label: 'Menú Táctil', desc: 'Navegación principal.', color: 'from-blue-400 to-cyan-500', icon: 'M' },
-                                    { type: 'WEATHER', label: 'Clima Vivo', desc: 'Pronóstico en tiempo real.', color: 'from-sky-400 to-blue-600', icon: 'W' },
-                                    { type: 'NAV_BUTTON', label: 'Botón', desc: 'Volver/Link.', color: 'from-pink-500 to-rose-600', icon: 'N' },
-                                    { type: 'TICKER', label: 'Ticker', desc: 'Cinta de noticias.', color: 'from-blue-600 to-blue-800', icon: <Megaphone className="w-4 h-4" /> },
-                                    { type: 'SOCIAL_FEED', label: 'Social Feed', desc: 'Reseñas e Instagram.', color: 'from-pink-600 to-purple-700', icon: <Instagram className="w-4 h-4" /> },
-                                    { type: 'COUNTDOWN', label: 'Countdown', desc: 'Reloj regresivo.', color: 'from-orange-500 to-red-600', icon: <Clock className="w-4 h-4" /> },
-                                    { type: 'FLIGHT_BOARD', label: 'Vuelos', desc: 'Salidas/Llegadas.', color: 'from-indigo-600 to-blue-900', icon: <PlaneTakeoff className="w-4 h-4" /> },
-                                    { type: 'MUSIC_PLAYER', label: 'Música', desc: 'Player visualizer.', color: 'from-emerald-500 to-green-700', icon: <Music className="w-4 h-4" /> },
-                                ].map((item: any) => (
-                                    <button
-                                        key={item.type}
-                                        onClick={() => addWidget(item.type)}
-                                        className="group relative flex items-center gap-3 bg-[#111] hover:bg-white/[0.03] border border-white/5 hover:border-blue-500/30 p-2.5 rounded-lg transition-all overflow-hidden"
-                                    >
-                                        <div className={`w-10 h-10 rounded-md bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500 shrink-0`}>
-                                            <span className="text-lg font-black text-white italic">{typeof item.icon === 'string' ? item.icon : item.icon}</span>
-                                        </div>
-                                        <div className="flex flex-col items-start">
-                                            <span className="text-[12px] font-black uppercase tracking-tight text-white italic">
-                                                {item.label}
-                                            </span>
-                                            <span className="text-[9px] text-neutral-600 font-bold uppercase tracking-widest mt-0.5 leading-none">
-                                                {item.desc}
-                                            </span>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </motion.aside>
+                <FloatingRightDock
+                    orientation={orientation}
+                    onOrientationChange={(o) => {
+                        setOrientation(o);
+                        // Flip resolution dims to match the orientation
+                        setResolution((r) => {
+                            const isPortraitVal = r.height > r.width;
+                            const wantPortrait = o === 'portrait';
+                            if (isPortraitVal === wantPortrait) return r;
+                            return { width: r.height, height: r.width };
+                        });
+                    }}
+                    resolution={resolution}
+                    onResolutionChange={(r) => {
+                        setResolution(r);
+                        // Sync orientation to the new resolution
+                        setOrientation(r.height > r.width ? 'portrait' : 'landscape');
+                    }}
+                    selectedWidgetCount={selectedWidgetId ? 1 : 0}
+                    totalWidgets={widgets.length}
+                    onOpenProperties={() => setRightSidebarOpen(true)}
+                />
 
                 {/* Main Workspace (Canvas Area) */}
                 {/* Main Workspace (Canvas Area) */}
-                <main className="flex-1 bg-[#0a0a0a] p-12 overflow-hidden relative">
+                <main className="flex-1 bg-background p-6 pt-20 overflow-hidden relative">
                     {/* Background Texture */}
                     <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
 
-                    <div className="h-full flex flex-col gap-8 max-w-[1400px] mx-auto relative z-10">
+                    <div className="h-full flex flex-col gap-4 w-full relative z-10">
                         {/* Status/Control Bar */}
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -594,36 +567,18 @@ export default function AdminDashboard() {
                                 />
                             </div>
 
-                            <div className="flex bg-[#111] p-1.5 rounded-lg border border-white/5">
-                                <button
-                                    onClick={() => setOrientation('landscape')}
-                                    className={`px-6 py-2 rounded-md text-[10px] font-black uppercase transition-all flex items-center gap-2 ${orientation === 'landscape' ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-neutral-500 hover:text-neutral-300'}`}
-                                >
-                                    <Monitor className="w-4 h-4" /> Landscape
-                                </button>
-                                <button
-                                    onClick={() => setOrientation('portrait')}
-                                    className={`px-6 py-2 rounded-md text-[10px] font-black uppercase transition-all flex items-center gap-2 ${orientation === 'portrait' ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-neutral-500 hover:text-neutral-300'}`}
-                                >
-                                    <Smartphone className="w-4 h-4" /> Portrait
-                                </button>
-                            </div>
-                            <div className="bg-[#111] px-4 py-2 rounded-lg border border-white/5 flex items-center gap-2">
-                                <div className="flex flex-col items-end">
-                                    <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Resolución</span>
-                                    <span className="text-[10px] font-mono font-bold text-blue-400">
-                                        {orientation === 'landscape' ? '1920 x 1080' : '1080 x 1920'}
-                                    </span>
-                                </div>
-                            </div>
+
+
                         </div>
 
                         {/* Interactive Canvas */}
-                        <div className="flex-1 min-h-0 bg-[#050505] rounded-xl border border-white/5 shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-auto p-6 relative group custom-scrollbar">
+                        <div ref={canvasContainerRef} className="flex-1 min-h-0 rounded-xl border bg-muted/30 overflow-auto p-6 pt-20 relative group custom-scrollbar">
                             <Canvas
                                 orientation={orientation}
                                 widgets={widgets}
-                                onWidgetsChange={setWidgets}
+                                onWidgetsChange={setWidgetsWithHistory}
+                                onCommit={commitHistory}
+                                onAddWidget={addWidget}
                                 selectedId={selectedWidgetId}
                                 onSelect={setSelectedWidgetId}
                                 backgroundImage={backgroundImage}
@@ -638,24 +593,53 @@ export default function AdminDashboard() {
                             {/* Visual Hint */}
                             {!selectedWidgetId && widgets.length > 0 && (
                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-3">
-                                    <MousePointer2 className="w-10 h-10 text-blue-500 animate-bounce" />
-                                    <span className="text-[10px] font-black text-blue-500/50 uppercase tracking-[0.4em]">Haz click en un elemento para editarlo</span>
+                                    <MousePointer2 className="w-10 h-10 text-primary animate-bounce" />
+                                    <span className="text-[10px] font-bold text-primary/60 uppercase tracking-[0.3em]">Haz click en un elemento para editarlo</span>
                                 </div>
                             )}
                         </div>
+
+                        <FloatingToolbar
+                            widget={widgets.find((w) => w.id === selectedWidgetId) || null}
+                            canvasRef={canvasContainerRef}
+                            onDuplicate={duplicateSelected}
+                            onDelete={deleteSelected}
+                            onBringForward={bringForward}
+                            onSendBackward={sendBackward}
+                            onAlign={alignToCanvas}
+                        />
+
+                        <StatusBar
+                            selected={widgets.find((w) => w.id === selectedWidgetId) || null}
+                            totalWidgets={widgets.length}
+                            gridSize={16}
+                        />
                     </div>
                 </main>
 
-                {/* Properties Inspector Panel */}
-                <motion.aside
-                    initial={false}
-                    animate={{
-                        width: rightSidebarOpen ? 400 : 0,
-                        opacity: rightSidebarOpen ? 1 : 0
-                    }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                    className="bg-[#080808] border-l border-white/5 flex flex-col overflow-hidden relative group/rightsidebar"
+                {/* Properties Inspector — modal Dialog */}
+                <AnimatePresence>{rightSidebarOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="fixed inset-0 z-50 grid place-items-center p-6 bg-black/40 backdrop-blur-sm"
+                    onClick={(e) => { if (e.target === e.currentTarget) setRightSidebarOpen(false); }}
                 >
+                <motion.aside
+                    initial={{ scale: 0.96, opacity: 0, y: 12 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.96, opacity: 0, y: 12 }}
+                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    className="w-full max-w-2xl max-h-[88vh] bg-card border text-card-foreground rounded-lg shadow-2xl flex flex-col overflow-hidden"
+                >
+                    <div className="h-12 px-4 flex items-center justify-between border-b">
+                        <h2 className="font-heading text-[14px] font-bold tracking-tight">Lienzo Maestro</h2>
+                        <button onClick={() => setRightSidebarOpen(false)} className="size-7 grid place-items-center rounded-md hover:bg-accent text-muted-foreground hover:text-foreground">
+                            <X className="size-4" />
+                        </button>
+                    </div>
                     {/* Toggle Button Right */}
                     <button
                         onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
@@ -1701,6 +1685,8 @@ export default function AdminDashboard() {
                         }
                     </div>
                 </motion.aside>
+                </motion.div>
+                )}</AnimatePresence>
             </div >
 
             {/* Custom Styled Confirmation Modal */}
@@ -1800,6 +1786,7 @@ export default function AdminDashboard() {
                     )
                 }
             </AnimatePresence >
+            <Toaster />
         </div >
     );
 }
