@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Lock, Save, Monitor } from 'lucide-react';
+import { Lock, Save, Monitor, FileCode, ExternalLink } from 'lucide-react';
 
 export default function SettingsPage() {
     return (
@@ -86,6 +86,54 @@ export default function SettingsPage() {
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Node.js</div>
                         <div className="font-mono font-semibold">v22+</div>
                     </div>
+                </div>
+            </motion.div>
+
+            {/* API Docs */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-xl border bg-card p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                    <div className="size-11 rounded-xl grid place-items-center bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20">
+                        <FileCode className="size-5" />
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="text-lg font-bold tracking-tight">Documentación de la API</h3>
+                        <p className="text-[12px] text-muted-foreground">Swagger interactivo con todos los endpoints, schemas y ejemplos.</p>
+                    </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <a
+                        href="/api-docs"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 transition-colors"
+                    >
+                        Abrir Swagger UI <ExternalLink className="size-3.5" />
+                    </a>
+                    <a
+                        href="/api-docs/swagger.json"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 h-9 px-4 rounded-md border bg-background text-[12px] font-medium hover:bg-accent transition-colors"
+                    >
+                        Descargar JSON
+                    </a>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                    {[
+                        { label: 'Layouts', endpoint: '/api/layouts' },
+                        { label: 'Screens', endpoint: '/api/screens' },
+                        { label: 'Sensors', endpoint: '/api/sensors' },
+                        { label: 'Products', endpoint: '/api/products' },
+                        { label: 'Categories', endpoint: '/api/categories' },
+                        { label: 'Activities', endpoint: '/api/activities' },
+                        { label: 'Screensaver', endpoint: '/api/settings/screensaver' },
+                        { label: 'Feedback', endpoint: '/api/feedback' },
+                    ].map((e) => (
+                        <div key={e.endpoint} className="rounded-md border bg-muted/40 px-2.5 py-1.5">
+                            <div className="font-bold text-foreground">{e.label}</div>
+                            <div className="text-muted-foreground font-mono text-[10px] truncate">{e.endpoint}</div>
+                        </div>
+                    ))}
                 </div>
             </motion.div>
         </div>

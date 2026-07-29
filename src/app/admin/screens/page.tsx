@@ -204,34 +204,6 @@ export default function ScreensPage() {
             console.error('idle timeout update failed', e);
         }
     };
-    const copyPlayerUrl = async (screenId: string) => {
-        const url = window.location.origin + '/player/' + screenId;
-        const ok = await copyToClipboard(url);
-        if (ok) toast.success('URL copiada', { description: url });
-        else toast.error('No se pudo copiar', { description: url });
-    };
-
-    const filteredScreens = useMemo(() => {
-        const now = Date.now();
-        return screens
-            .filter((s) => {
-                const isOnline = now - new Date(s.lastSeen).getTime() < ONLINE_THRESHOLD_MS;
-                if (filter === 'online' && !isOnline) return false;
-                if (filter === 'offline' && isOnline) return false;
-                if (filter === 'pending' && s.isAuthorized) return false;
-                if (search && !((s.name || s.screenId).toLowerCase().includes(search.toLowerCase()))) return false;
-                return true;
-            })
-            .sort((a, b) => {
-                if (!a.isAuthorized && b.isAuthorized) return -1;
-                if (a.isAuthorized && !b.isAuthorized) return 1;
-                const aOnline = now - new Date(a.lastSeen).getTime() < ONLINE_THRESHOLD_MS;
-                const bOnline = now - new Date(b.lastSeen).getTime() < ONLINE_THRESHOLD_MS;
-                if (aOnline !== bOnline) return aOnline ? 1 : -1;
-                return (a.name || a.screenId).localeCompare(b.name || b.screenId);
-            });
-    }, [screens, filter, search]);
-
     return (
         <TooltipProvider delay={200}><div className="flex-1 flex flex-col min-h-0 bg-background text-foreground">
             <AdminHeader
@@ -514,20 +486,6 @@ export default function ScreensPage() {
                 )}
             </div>
 
-            <AnimatePresence>
-                {!connected && !loading && (
-                    <motion.div
-                        initial={{ y: 40, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 40, opacity: 0 }}
-                        className="px-6 lg:px-10 py-3 border-t flex items-center gap-3 text-[13px] bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300"
-                    >
-                        <RefreshCw size={14} className="animate-spin" />
-                        <span>Reconectando con el servidor de tiempo real…</span>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
             <AlertDialog open={!!revokeId} onOpenChange={(o) => !o && setRevokeId(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -594,36 +552,7 @@ const StatPill: React.FC<{ icon: React.ReactNode; label: string; value: number; 
                 <span className="font-mono text-lg font-bold tabular-nums leading-none">{value}</span>
             </div>
 
-            <AnimatePresence>
-                {!connected && !loading && (
-                    <motion.div
-                        initial={{ y: 40, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 40, opacity: 0 }}
-                        className="px-6 lg:px-10 py-3 border-t flex items-center gap-3 text-[13px] bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300"
-                    >
-                        <RefreshCw size={14} className="animate-spin" />
-                        <span>Reconectando con el servidor de tiempo real…</span>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
-            <AlertDialog open={!!revokeId} onOpenChange={(o) => !o && setRevokeId(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Revocar autorización?</AlertDialogTitle>
-                        <AlertDialogDescription>La pantalla quedará desconectada y dejará de recibir contenido hasta autorizarla nuevamente.</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { if (revokeId) handleAuthorize(revokeId, false); setRevokeId(null); }}>
-                            Revocar
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            <Toaster />
         </div>
     );
 };
