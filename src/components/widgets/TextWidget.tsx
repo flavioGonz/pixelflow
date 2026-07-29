@@ -13,20 +13,33 @@ interface TextWidgetProps {
         style?: 'minimal' | 'gradient' | 'glass' | 'typewriter';
         gradientFrom?: string;
         gradientTo?: string;
+        targetLayoutId?: string;
+        onTapAction?: 'NONE' | 'GO_TO' | 'BACK' | 'HOME';
     };
 }
 
+// Cross-widget navigation via a global socket event dispatched on the window.
+function useNavAction(data: any) {
+    return React.useCallback(() => {
+        const action = data.onTapAction || (data.targetLayoutId ? 'GO_TO' : 'NONE');
+        if (action === 'NONE') return;
+        window.dispatchEvent(new CustomEvent('pf-nav', { detail: { action, targetLayoutId: data.targetLayoutId } }));
+    }, [data.onTapAction, data.targetLayoutId]);
+}
+
 const TextWidget: React.FC<TextWidgetProps> = ({ data }) => {
+    const navAction = useNavAction(data);
+    const isClickable = (data.onTapAction && data.onTapAction !== 'NONE') || !!data.targetLayoutId;
     const style = data.style || 'minimal';
     const textAlign = data.textAlign || 'center';
 
     // Base container styles
-    const containerClasses = `w-full h-full p-4 flex flex-col justify-center ${textAlign === 'center' ? 'items-center' : textAlign === 'right' ? 'items-end' : 'items-start'}`;
+    const containerClasses = `w-full h-full p-4 flex flex-col justify-center ${isClickable ? 'cursor-pointer' : ''} ${textAlign === 'center' ? 'items-center' : textAlign === 'right' ? 'items-end' : 'items-start'}`;
 
     // Animation variants
     const fadeIn: Variants = {
         hidden: { opacity: 0, y: 20 },
-        visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
+        visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } }
     };
 
     if (style === 'gradient') {
@@ -34,8 +47,7 @@ const TextWidget: React.FC<TextWidgetProps> = ({ data }) => {
         const toColor = data.gradientTo || '#8b5cf6';
 
         return (
-            <motion.div
-                initial="hidden"
+            <motion.div onClick={navAction} initial="hidden"
                 animate="visible"
                 variants={fadeIn}
                 className={containerClasses}
@@ -64,8 +76,7 @@ const TextWidget: React.FC<TextWidgetProps> = ({ data }) => {
 
     if (style === 'glass') {
         return (
-            <motion.div
-                initial="hidden"
+            <motion.div onClick={navAction} initial="hidden"
                 animate="visible"
                 variants={fadeIn}
                 className="w-full h-full p-8 flex flex-col justify-center items-center"
@@ -111,8 +122,7 @@ const TextWidget: React.FC<TextWidgetProps> = ({ data }) => {
 
     // Minimal
     return (
-        <motion.div
-            initial="hidden"
+        <motion.div onClick={navAction} initial="hidden"
             animate="visible"
             variants={fadeIn}
             className={containerClasses}

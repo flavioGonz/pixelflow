@@ -1,235 +1,334 @@
 'use client';
 
-import React, { useState } from 'react';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { ShoppingBag, ArrowLeft, Star, Award, Leaf, ChevronRight, Search } from 'lucide-react';
+import React, { useState, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import { TouchPopover } from '@/components/touch';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Autoplay, FreeMode, Navigation, Pagination } from 'swiper/modules';
+import { ShoppingBag } from 'lucide-react';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 
 interface Category {
-    id: string;
+    _id?: string;
+    id?: string;
     name: string;
     photo?: string;
-    description?: string;
 }
 
 interface ProductItem {
-    id: string;
+    _id?: string;
+    id?: string;
     name: string;
-    price: number;
-    currency: string;
-    photo: string;
+    price?: number;
+    currency?: string;
+    photo?: string;
     description?: string;
-    isOffer?: boolean;
-    categoryIds?: string[]; // Multiple categories
+    available?: boolean;
+    categoryIds?: string[];
 }
 
 interface ProductListWidgetProps {
     data: {
-        title: string;
-        categories: Category[];
-        items: ProductItem[];
-        categoriesToShow?: string[]; // IDs of categories to display
+        title?: string;
+        categories?: Category[];
+        items?: ProductItem[];
+        categoriesToShow?: string[];  // Filter by category IDs
+        showPrice?: boolean;
+        showDescription?: boolean;
+        showCategoryHeader?: boolean;
+        groupByCategory?: boolean;
+        theme?: 'clean' | 'dark' | 'premium' | 'restaurant' | 'chalkboard';
+        accentColor?: string;
+        autoplayMs?: number;
+        cardsPerView?: number;
     };
 }
 
-const FlagIcon = ({ currency }: { currency: string }) => {
-    switch (currency) {
-        case 'U$D':
-            return <img src="https://flagcdn.com/us.svg" className="w-[1.2em] h-auto object-contain rounded-[2px]" alt="USA" />;
-        case 'R$':
-            return <img src="https://flagcdn.com/br.svg" className="w-[1.2em] h-auto object-contain rounded-[2px]" alt="Brazil" />;
-        case 'AR$':
-            return <img src="https://flagcdn.com/ar.svg" className="w-[1.2em] h-auto object-contain rounded-[2px]" alt="Argentina" />;
-        default:
-            return <img src="https://flagcdn.com/uy.svg" className="w-[1.2em] h-auto object-contain rounded-[2px]" alt="Uruguay" />;
-    }
+const themePresets: Record<string, { bg: string; card: string; text: string; sub: string; price: string; accent: string; catBg: string }> = {
+    clean:   { bg: 'transparent',     card: 'rgba(255,255,255,0.90)', text: '#0f172a', sub: '#64748b', price: '#0ea5e9', accent: '#0ea5e9', catBg: 'rgba(255,255,255,0.7)' },
+    dark:    { bg: 'transparent',     card: 'rgba(20,20,25,0.85)',    text: '#f1f5f9', sub: '#94a3b8', price: '#facc15', accent: '#facc15', catBg: 'rgba(0,0,0,0.5)' },
+    premium: { bg: 'transparent',     card: 'linear-gradient(180deg, rgba(20,20,25,0.9), rgba(30,30,35,0.9))', text: '#f5f5f5', sub: '#a1a1aa', price: '#d4af37', accent: '#d4af37', catBg: 'rgba(0,0,0,0.6)' },
+    restaurant:  { bg: 'transparent', card: 'linear-gradient(180deg, #faf6ef 0%, #f0e6d2 100%)', text: '#3d2817', sub: '#8b6f4d', price: '#a04a2a', accent: '#a04a2a', catBg: 'rgba(61,40,23,0.85)' },
+    chalkboard:  { bg: 'transparent', card: '#1a1a1a', text: '#f5f5dc', sub: '#c4b998', price: '#e8c884', accent: '#e8c884', catBg: '#0f0f0f' },
 };
 
+const ProductCard: React.FC<{ p: ProductItem; showPrice: boolean; showDesc: boolean; theme: any; variant?: string }> = ({ p, showPrice, showDesc, theme, variant }) => {
+    // Restaurant menu variant: horizontal layout with dotted separator, elegant typography
+    if (variant === 'restaurant' || variant === 'chalkboard') {
+        const isChalk = variant === 'chalkboard';
+        return (
+            <motion.article
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="rounded-lg overflow-hidden h-full flex items-start gap-3 p-4"
+                style={{ background: theme.card, color: theme.text, borderBottom: '1px dashed ' + (theme.sub || '#94a3b8'), backdropFilter: 'blur(6px)' }}
+            >
+                {p.photo && (
+                    <div className="size-16 md:size-20 rounded-md overflow-hidden bg-black/10 shrink-0">
+                        <img src={p.photo} alt={p.name} className="w-full h-full object-cover" />
+                    </div>
+                )}
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-3">
+                        <h3 className={"font-bold text-lg md:text-2xl leading-tight truncate " + (isChalk ? 'italic' : '')} style={{ color: theme.text, fontFamily: isChalk ? 'cursive, serif' : 'Georgia, "Times New Roman", serif' }}>
+                            {p.name}
+                        </h3>
+                        <div className="flex-1 border-b border-dotted opacity-40" style={{ borderColor: theme.sub }} />
+                        {showPrice && p.price != null && (
+                            <span className="font-bold text-lg md:text-2xl tabular-nums" style={{ color: theme.price, fontFamily: isChalk ? 'cursive, serif' : 'Georgia, serif' }}>
+                                {'$' + p.price}
+                            </span>
+                        )}
+                    </div>
+                    {showDesc && p.description && (
+                        <p className="text-[12px] md:text-sm mt-1.5 italic leading-snug opacity-80" style={{ color: theme.sub, fontFamily: isChalk ? 'cursive, serif' : 'Georgia, serif' }}>
+                            {p.description}
+                        </p>
+                    )}
+                </div>
+            </motion.article>
+        );
+    }
+    return (
+    <motion.article
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        className="rounded-2xl overflow-hidden shadow-2xl h-full flex flex-col items-center text-center p-4"
+        style={{ background: theme.card, color: theme.text, backdropFilter: 'blur(20px)' }}
+    >
+        {/* Image */}
+        <div className="w-full aspect-square rounded-xl overflow-hidden bg-black/10 relative">
+            {p.photo ? (
+                <img src={p.photo} alt={p.name} className="w-full h-full object-cover" />
+            ) : (
+                <div className="w-full h-full grid place-items-center text-black/20">
+                    <ShoppingBag className="size-16" />
+                </div>
+            )}
+        </div>
+
+        {/* Info */}
+        <div className="pt-3 pb-1 flex-1 flex flex-col items-center w-full min-w-0">
+            <h3 className="font-bold text-lg md:text-2xl leading-tight tracking-tight w-full truncate" style={{ color: theme.text }}>
+                {p.name}
+            </h3>
+            {showDesc && p.description && (
+                <p className="text-[11px] md:text-sm mt-1 line-clamp-2 opacity-70" style={{ color: theme.sub }}>
+                    {p.description}
+                </p>
+            )}
+        </div>
+
+        {/* Price */}
+        {showPrice && p.price != null && (
+            <div className="pt-2 border-t border-current/10 w-full flex items-baseline justify-center gap-1">
+                <span className="text-xs md:text-sm font-semibold opacity-70" style={{ color: theme.sub }}>{p.currency || '$'}</span>
+                <span className="font-black text-2xl md:text-4xl tabular-nums" style={{ color: theme.price }}>{p.price}</span>
+            </div>
+        )}
+
+        {p.available === false && (
+            <span className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">
+                Agotado
+            </span>
+        )}
+    </motion.article>
+);
+};
+
+
+const ProductLongPress: React.FC<{ product: ProductItem; onOpen: (p: ProductItem) => void; children: React.ReactNode }> = ({ product, onOpen, children }) => {
+    const timer = useRef<any>(null);
+    const startXY = useRef<{ x: number; y: number } | null>(null);
+    const cancel = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
+    const onTouchStart = (e: React.TouchEvent) => {
+        const t = e.touches[0];
+        startXY.current = { x: t.clientX, y: t.clientY };
+        cancel();
+        timer.current = setTimeout(() => {
+            try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) (navigator as any).vibrate?.(15); } catch {}
+            onOpen(product);
+        }, 500);
+    };
+    const onTouchMove = (e: React.TouchEvent) => {
+        if (!startXY.current) return;
+        const t = e.touches[0];
+        if (Math.abs(t.clientX - startXY.current.x) > 8 || Math.abs(t.clientY - startXY.current.y) > 8) cancel();
+    };
+    const onTouchEnd = () => { cancel(); startXY.current = null; };
+    return (
+        <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd} style={{ WebkitUserSelect: 'none', userSelect: 'none', touchAction: 'pan-y', height: '100%' }}>
+            {children}
+        </div>
+    );
+};
+
+const ProductDetailPopover: React.FC<{ product: ProductItem | null; theme: any; onClose: () => void }> = ({ product, theme, onClose }) => (
+    <TouchPopover open={!!product} onClose={onClose}>
+        {product && (
+            <div style={{ color: theme.text }}>
+                {product.photo && (
+                    <div className="rounded-xl overflow-hidden aspect-[4/3] bg-black/10 mb-4">
+                        <img src={product.photo} alt={product.name} className="w-full h-full object-cover" />
+                    </div>
+                )}
+                <h3 className="font-black text-2xl md:text-3xl leading-tight mb-2" style={{ color: theme.text }}>{product.name}</h3>
+                {product.description && (
+                    <p className="text-sm md:text-base leading-relaxed mb-4 opacity-80" style={{ color: theme.sub }}>{product.description}</p>
+                )}
+                {product.price != null && (
+                    <div className="pt-3 border-t border-current/10 flex items-baseline gap-2">
+                        <span className="text-sm opacity-70" style={{ color: theme.sub }}>{product.currency || '$'}</span>
+                        <span className="font-black text-4xl md:text-5xl tabular-nums" style={{ color: theme.price }}>{product.price}</span>
+                    </div>
+                )}
+                <div className="pt-5 text-center">
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-3 rounded-full font-bold text-sm"
+                        style={{ background: theme.accent, color: '#fff', minHeight: 48 }}
+                    >
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        )}
+    </TouchPopover>
+);
+
+const CategoryStrip: React.FC<{ category: Category; products: ProductItem[]; showPrice: boolean; showDesc: boolean; theme: any; perView: number; autoplayMs: number; showCategoryHeader: boolean; themeName?: string; onOpenDetail?: (p: ProductItem) => void }> = ({
+    category, products, showPrice, showDesc, theme, perView, autoplayMs, showCategoryHeader, themeName, onOpenDetail,
+}) => (
+    <div className="w-full flex flex-col gap-3 mb-6">
+        {showCategoryHeader && (
+            <div className="flex items-center gap-3 px-2">
+                {category.photo && (
+                    <div className="size-9 rounded-full overflow-hidden shrink-0 shadow" style={{ background: theme.catBg }}>
+                        <img src={category.photo} alt={category.name} className="w-full h-full object-cover" />
+                    </div>
+                )}
+                <h2 className="font-black text-xl md:text-3xl uppercase tracking-wide truncate" style={{ color: theme.text }}>
+                    {category.name}
+                </h2>
+                <span className="text-[11px] font-mono opacity-60 ml-auto" style={{ color: theme.sub }}>{products.length}</span>
+            </div>
+        )}
+
+        <Swiper
+            modules={[Autoplay, FreeMode, Navigation, Pagination]}
+            spaceBetween={16}
+            slidesPerView={perView}
+            freeMode
+            grabCursor
+            autoplay={autoplayMs > 0 ? { delay: autoplayMs, disableOnInteraction: false, pauseOnMouseEnter: true } : false}
+            navigation
+            className="w-full !pb-2"
+            breakpoints={{
+                640:  { slidesPerView: Math.min(perView, 2) },
+                1024: { slidesPerView: perView },
+            }}
+        >
+            {products.map((p) => (
+                <SwiperSlide key={p._id || p.id} style={{ height: 'auto' }} className="!h-auto">
+                    <ProductLongPress product={p} onOpen={(pp) => onOpenDetail?.(pp)}>
+                        <ProductCard p={p} showPrice={showPrice} showDesc={showDesc} theme={theme} variant={themeName} />
+                    </ProductLongPress>
+                </SwiperSlide>
+            ))}
+        </Swiper>
+    </div>
+);
+
 const ProductListWidget: React.FC<ProductListWidgetProps> = ({ data }) => {
-    const [view, setView] = useState<'categories' | 'products'>('categories');
-    const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [detailProduct, setDetailProduct] = useState<ProductItem | null>(null);
+    const openDetail = useCallback((p: ProductItem) => setDetailProduct(p), []);
+    const closeDetail = useCallback(() => setDetailProduct(null), []);
 
-    const displayedCategories = data.categories?.filter(c =>
-        !data.categoriesToShow || data.categoriesToShow.length === 0 || data.categoriesToShow.includes(c.id)
-    ) || [];
+    const theme = themePresets[data.theme || 'clean'];
+    const showPrice = data.showPrice !== false;
+    const showDesc = data.showDescription === true;
+    const showCategoryHeader = data.showCategoryHeader !== false;
+    const perView = data.cardsPerView || 3;
+    const autoplayMs = data.autoplayMs ?? 0;
+    const groupByCategory = data.groupByCategory !== false;
 
-    const activeCategory = data.categories?.find(c => c.id === activeCategoryId);
+    const cats = (data.categories || []);
+    const items = (data.items || []).filter(p => p.available !== false);
 
-    const filteredProducts = data.items?.filter(item => {
-        const matchesCategory = activeCategoryId
-            ? item.categoryIds?.includes(activeCategoryId)
-            : true;
+    // Filter by categoriesToShow (or use all)
+    const activeCatIds = new Set(data.categoriesToShow && data.categoriesToShow.length > 0
+        ? data.categoriesToShow
+        : cats.map(c => c._id || c.id).filter(Boolean) as string[]);
 
-        // If we are in category view or haven't selected one, we still filter by what the widget allows
-        const isAllowedByWidget = !data.categoriesToShow || data.categoriesToShow.length === 0 ||
-            item.categoryIds?.some(id => data.categoriesToShow?.includes(id));
+    // Items available for shown categories
+    const visibleItems = items.filter(p =>
+        !p.categoryIds || p.categoryIds.length === 0 || p.categoryIds.some(cid => activeCatIds.has(cid))
+    );
 
-        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.description?.toLowerCase()?.includes(searchQuery.toLowerCase());
-
-        return matchesCategory && matchesSearch && isAllowedByWidget;
-    }) || [];
-
-    const cinematicEase: [number, number, number, number] = [0.16, 1, 0.3, 1];
-
-    const containerVariants: Variants = {
-        hidden: { opacity: 0, scale: 0.98 },
-        visible: {
-            opacity: 1,
-            scale: 1,
-            transition: {
-                duration: 0.3,
-                ease: cinematicEase,
-                staggerChildren: 0.04
-            }
-        },
-        exit: {
-            opacity: 0,
-            scale: 1.02,
-            transition: { duration: 0.2, ease: cinematicEase }
-        }
-    };
-
-    const itemVariants: Variants = {
-        hidden: { opacity: 0, y: 15, scale: 0.98 },
-        visible: {
-            opacity: 1,
-            y: 0,
-            scale: 1,
-            transition: { type: 'spring', stiffness: 350, damping: 30 }
-        }
-    };
+    if (visibleItems.length === 0) {
+        return (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-6 text-center" style={{ color: theme.text }}>
+                {data.title && <h2 className="font-black text-2xl md:text-4xl uppercase tracking-tight opacity-90">{data.title}</h2>}
+                <ShoppingBag className="size-10 opacity-40 mt-2" />
+                <p className="text-sm opacity-60">Sin productos disponibles</p>
+                {(!data.items || data.items.length === 0) && (
+                    <p className="text-xs opacity-40 mt-1">Cargá productos en /admin/products</p>
+                )}
+            </div>
+        );
+    }
 
     return (
-        <div className="w-full h-full p-6 md:p-12 flex flex-col gap-6 md:gap-14 overflow-hidden relative bg-transparent text-white font-sans">
-            <AnimatePresence mode="wait">
-                {view === 'categories' ? (
-                    <motion.div
-                        key="categories-view"
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        variants={containerVariants}
-                        className="flex-1 flex flex-col gap-8 md:gap-16 relative z-10"
-                    >
-                        <header className="flex flex-col gap-2">
-                            <motion.div variants={itemVariants} className="flex items-center gap-3">
-                                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-400 opacity-60 italic">CARTA DIGITAL PREMIUM</span>
-                            </motion.div>
-                            <motion.h2
-                                variants={itemVariants}
-                                className="text-4xl md:text-7xl font-black tracking-tighter uppercase leading-[0.9] italic"
-                            >
-                                {data.title || 'Menú'}
-                            </motion.h2>
-                        </header>
+        <div className="w-full h-full flex flex-col overflow-hidden" style={{ background: theme.bg, color: theme.text }}>
+            {/* Header */}
+            {data.title && (
+                <header className="px-4 py-3 flex items-baseline gap-3 shrink-0">
+                    <h2 className="font-black text-2xl md:text-4xl uppercase tracking-tight leading-none">{data.title}</h2>
+                    <span className="text-[11px] font-mono opacity-60 ml-auto">{visibleItems.length} items</span>
+                </header>
+            )}
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar-hidden flex flex-col items-start justify-center gap-2 md:gap-4 pb-32">
-                            {displayedCategories.map((cat, idx) => (
-                                <motion.button
-                                    key={cat.id}
-                                    variants={itemVariants}
-                                    whileHover={{ x: 20 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => {
-                                        setActiveCategoryId(cat.id);
-                                        setView('products');
-                                    }}
-                                    className="group flex items-center gap-6 text-left"
-                                >
-                                    <span className="text-emerald-500/30 text-xl md:text-3xl font-mono font-black italic">0{idx + 1}</span>
-                                    <h3 className="text-4xl md:text-8xl font-black uppercase tracking-tighter italic leading-none group-hover:text-emerald-400 transition-all duration-300">
-                                        {cat.name}
-                                    </h3>
-                                    <ChevronRight className="w-8 h-8 md:w-16 md:h-16 text-emerald-500 opacity-0 group-hover:opacity-100 transition-all -translate-x-10 group-hover:translate-x-0" />
-                                </motion.button>
-                            ))}
-                            {displayedCategories.length === 0 && (
-                                <p className="text-white/20 uppercase font-black italic tracking-widest">No hay categorías seleccionadas</p>
-                            )}
-                        </div>
-                    </motion.div>
+            {/* Content */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
+                {groupByCategory ? (
+                    Array.from(activeCatIds).map((cid) => {
+                        const cat = cats.find(c => (c._id || c.id) === cid);
+                        if (!cat) return null;
+                        const catItems = visibleItems.filter(p => p.categoryIds?.includes(cid));
+                        if (catItems.length === 0) return null;
+                        return (
+                            <CategoryStrip themeName={data.theme} onOpenDetail={openDetail}
+                                key={cid}
+                                category={cat}
+                                products={catItems}
+                                showPrice={showPrice}
+                                showDesc={showDesc}
+                                theme={theme}
+                                perView={perView}
+                                autoplayMs={autoplayMs}
+                                showCategoryHeader={showCategoryHeader}
+                            />
+                        );
+                    })
                 ) : (
-                    <motion.div
-                        key="products-view"
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        variants={containerVariants}
-                        className="flex-1 flex flex-col gap-8 md:gap-12 relative z-10"
-                    >
-                        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                            <div className="space-y-4">
-                                <motion.button
-                                    variants={itemVariants}
-                                    onClick={() => setView('categories')}
-                                    className="flex items-center gap-3 px-5 py-2 rounded-lg bg-white/10 border border-white/10 text-[9px] font-black uppercase tracking-widest backdrop-blur-md hover:bg-white/20 transition-all"
-                                >
-                                    <ArrowLeft className="w-3 h-3" /> volver
-                                </motion.button>
-                                <motion.h2
-                                    variants={itemVariants}
-                                    className="text-3xl md:text-6xl font-black tracking-tighter uppercase leading-none italic text-emerald-400"
-                                >
-                                    {activeCategory?.name}
-                                </motion.h2>
-                            </div>
-
-                            <motion.div
-                                variants={itemVariants}
-                                className="relative w-full max-w-sm"
-                            >
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                                <input
-                                    type="text"
-                                    placeholder="Buscar..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-6 text-sm outline-none focus:border-emerald-500/50 transition-all backdrop-blur-md font-bold italic"
-                                />
-                            </motion.div>
-                        </header>
-
-                        <div className="flex-1 overflow-y-auto custom-scrollbar-hidden grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 pb-40">
-                            {filteredProducts.map((product) => (
-                                <motion.div
-                                    key={product.id}
-                                    variants={itemVariants}
-                                    layout
-                                    className="flex gap-4 md:gap-8 group/item relative p-6 md:p-8 rounded-xl md:rounded-3xl bg-black/20 border border-white/5 shadow-2xl backdrop-blur-sm"
-                                >
-                                    <div className="w-20 h-20 md:w-32 md:h-32 flex-shrink-0 relative">
-                                        <div className="absolute inset-0 bg-emerald-500/10 blur-2xl opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                                        <img
-                                            src={product.photo || 'https://via.placeholder.com/400'}
-                                            alt={product.name}
-                                            className="w-full h-full object-contain rounded-lg md:rounded-xl relative z-10 transition-transform duration-500 group-hover/item:scale-105"
-                                        />
-                                    </div>
-                                    <div className="flex-1 flex flex-col justify-center gap-1 md:gap-2">
-                                        <div className="flex justify-between items-start gap-4">
-                                            <h3 className="text-xl md:text-3xl font-black uppercase tracking-tighter leading-tight group-hover/item:text-emerald-400 transition-colors italic">{product.name}</h3>
-                                            <div className="flex flex-col items-end">
-                                                <div className="flex items-center gap-3 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
-                                                    <FlagIcon currency={product.currency} />
-                                                    <span className="text-2xl md:text-4xl font-black italic text-emerald-500 font-mono tracking-tighter">
-                                                        <span className="text-[10px] md:text-sm not-italic opacity-40 mr-1">{product.currency === 'U$D' ? 'U$D' : product.currency === 'R$' ? 'R$' : product.currency === 'AR$' ? 'AR$' : '$'}</span>
-                                                        {product.price}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <p className="text-white/40 text-[10px] md:text-sm italic font-medium line-clamp-2 md:line-clamp-none leading-relaxed">
-                                            {product.description || 'Descripción premium del producto.'}
-                                        </p>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </motion.div>
+                    <CategoryStrip themeName={data.theme} onOpenDetail={openDetail}
+                        category={{ name: '', photo: '' }}
+                        products={visibleItems}
+                        showPrice={showPrice}
+                        showDesc={showDesc}
+                        theme={theme}
+                        perView={perView}
+                        autoplayMs={autoplayMs}
+                        showCategoryHeader={false}
+                    />
                 )}
-            </AnimatePresence>
-        </div>
+            </div>
+                    <ProductDetailPopover product={detailProduct} theme={theme} onClose={closeDetail} />
+            </div>
     );
 };
 

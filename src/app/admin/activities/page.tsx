@@ -40,6 +40,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import { StatPill, InfoTip } from '@/components/admin/StatPill';
+import { ActivityCalendar } from '@/components/admin/ActivityCalendar';
+import Info from 'lucide-react/dist/esm/icons/info';
+import Sparkles from 'lucide-react/dist/esm/icons/sparkles';
 
 const DAYS_OF_WEEK = [
     { value: 'TODOS', label: 'Todos los días' },
@@ -66,7 +70,7 @@ interface Activity {
 export default function ActivitiesPage() {
     const [activities, setActivities] = React.useState<any[]>([]);
     const [search, setSearch] = React.useState('');
-    const [viewMode, setViewMode] = React.useState<'grid' | 'table'>('table');
+    const [viewMode, setViewMode] = React.useState<'grid' | 'table' | 'calendar'>('table');
     const [editing, setEditing] = React.useState<Activity | null>(null);
     const [creating, setCreating] = React.useState(false);
     const [toDelete, setToDelete] = React.useState<any>(null);
@@ -141,8 +145,9 @@ export default function ActivitiesPage() {
                             className="h-9 pl-8"
                         />
                     </div>
-                    <ViewToggler viewMode={viewMode} setViewMode={setViewMode} />
+                    <ViewToggler viewMode={viewMode} setViewMode={setViewMode} modes={['calendar', 'table', 'grid']} />
                 </div>
+
 
                 <div className="flex-1 overflow-y-auto p-6">
                     {filtered.length === 0 ? (
@@ -159,6 +164,15 @@ export default function ActivitiesPage() {
                                 )}
                             </div>
                         </div>
+                    ) : viewMode === 'calendar' ? (
+                        <ActivityCalendar
+                            activities={filtered}
+                            onCreate={(preset) => {
+                                setEditing({ title: '', day: preset.day || 'TODOS', time: preset.time || '', isWeekly: preset.isWeekly ?? true } as any);
+                                setCreating(true);
+                            }}
+                            onEdit={(a) => setEditing(a)}
+                        />
                     ) : viewMode === 'grid' ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             <AnimatePresence>

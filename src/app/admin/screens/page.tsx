@@ -11,8 +11,14 @@ import ShieldAlert from 'lucide-react/dist/esm/icons/shield-alert';
 import Edit2 from 'lucide-react/dist/esm/icons/edit-2';
 import LinkIcon from 'lucide-react/dist/esm/icons/link';
 import Power from 'lucide-react/dist/esm/icons/power';
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2';
 import LayoutIcon from 'lucide-react/dist/esm/icons/layout';
 import Signal from 'lucide-react/dist/esm/icons/signal';
+import Wifi from 'lucide-react/dist/esm/icons/wifi';
+import WifiOff from 'lucide-react/dist/esm/icons/wifi-off';
+import ShieldCheck from 'lucide-react/dist/esm/icons/shield-check';
+import Activity from 'lucide-react/dist/esm/icons/activity';
+import Circle from 'lucide-react/dist/esm/icons/circle';
 import Search from 'lucide-react/dist/esm/icons/search';
 import LayoutGrid from 'lucide-react/dist/esm/icons/layout-grid';
 import List from 'lucide-react/dist/esm/icons/list';
@@ -29,6 +35,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     Table,
     TableBody,
@@ -60,9 +67,42 @@ interface ScreenRow {
     lastSeen: string;
     lastLayoutId?: string;
     viewport?: { width: number; height: number; orientation?: string };
+    userAgent?: string;
+    ipAddress?: string;
+    idleTimeoutMs?: number;
 }
 
 interface Layout { _id: string; name: string; }
+
+
+// Extract browser + version + OS from userAgent string. Lightweight — no external lib.
+function parseUA(ua?: string): { browser: string; version: string; os: string } {
+    if (!ua) return { browser: '—', version: '', os: '' };
+    let browser = 'Unknown', version = '';
+    // Order matters (Edge/Opera pretend to be Chrome)
+    if (/Edg\/([\d.]+)/.test(ua))         { browser = 'Edge';    version = ua.match(/Edg\/([\d.]+)/)![1]; }
+    else if (/OPR\/([\d.]+)/.test(ua))    { browser = 'Opera';   version = ua.match(/OPR\/([\d.]+)/)![1]; }
+    else if (/Firefox\/([\d.]+)/.test(ua)){ browser = 'Firefox'; version = ua.match(/Firefox\/([\d.]+)/)![1]; }
+    else if (/Chrome\/([\d.]+)/.test(ua)) { browser = 'Chrome';  version = ua.match(/Chrome\/([\d.]+)/)![1]; }
+    else if (/Version\/([\d.]+).*Safari/.test(ua)) { browser = 'Safari'; version = ua.match(/Version\/([\d.]+)/)![1]; }
+    else if (/Safari\/([\d.]+)/.test(ua)) { browser = 'Safari';  version = ua.match(/Safari\/([\d.]+)/)![1]; }
+    let os = '';
+    if (/Windows NT ([\d.]+)/.test(ua)) os = 'Windows';
+    else if (/Mac OS X/.test(ua))        os = 'macOS';
+    else if (/Android/.test(ua))         os = 'Android';
+    else if (/iPhone|iPad/.test(ua))     os = 'iOS';
+    else if (/Linux/.test(ua))           os = 'Linux';
+    return { browser, version: version.split('.')[0], os };
+}
+
+const BROWSER_ICON: Record<string, string> = {
+    Chrome:  '🌐',
+    Firefox: '🦊',
+    Safari:  '🧭',
+    Edge:    '🔷',
+    Opera:   '🎭',
+    Unknown: '❓',
+};
 
 const ONLINE_THRESHOLD_MS = 15000;
 type StatusFilter = 'all' | 'online' | 'offline' | 'pending';
@@ -72,11 +112,12 @@ export default function ScreensPage() {
     const [layouts, setLayouts] = useState<Layout[]>([]);
     const [loading, setLoading] = useState(true);
     const [connected, setConnected] = useState(false);
-    const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
-    const [filter, setFilter] = useState<StatusFilter>('all');
+    const [viewMode, setViewMode] = useState<'grid' | 'table' | 'calendar'>('table');
+    const [filter, setFilter] = useState<StatusFilter>('online');
     const [search, setSearch] = useState('');
     const [, setTick] = useState(0);
     const [revokeId, setRevokeId] = useState<string | null>(null);
+    const [toDelete, setToDelete] = useState<ScreenRow | null>(null);
 
     useEffect(() => {
         const id = setInterval(() => setTick((n) => n + 1), 5000);
@@ -103,6 +144,13 @@ export default function ScreensPage() {
         return () => { socket.disconnect(); };
     }, [fetchData]);
 
+    const handleDelete = () => {
+        if (!toDelete) return;
+        socket.emit('delete_screen', toDelete.screenId);
+        toast.success('Pantalla eliminada', { description: toDelete.name || toDelete.screenId });
+        setToDelete(null);
+    };
+
     const handleAuthorize = (screenId: string, status: boolean) => {
         socket.emit('authorize_screen', { screenId, isAuthorized: status });
         toast.success(status ? 'Terminal autorizado' : 'Terminal revocado');
@@ -113,6 +161,21 @@ export default function ScreensPage() {
     };
     const handleAssignLayout = (screenId: string, layoutId: string) => {
         socket.emit('assign_layout_to_screen', { screenId, layoutId });
+    };
+
+    const handleUpdateIdleTimeout = async (screenId: string, seconds: number) => {
+        try {
+            const secs = Math.max(3, Math.min(600, seconds || 20));
+            const res = await fetch('/api/screens/' + screenId + '/idle-timeout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idleTimeoutMs: secs * 1000 })
+            });
+            if (!res.ok) throw new Error('save failed');
+            setScreens(prev => prev.map(s => s.screenId === screenId ? { ...s, idleTimeoutMs: secs * 1000 } : s));
+        } catch (e) {
+            console.error('idle timeout update failed', e);
+        }
     };
     const copyPlayerUrl = async (screenId: string) => {
         const url = window.location.origin + '/player/' + screenId;
@@ -143,7 +206,7 @@ export default function ScreensPage() {
     }, [screens, filter, search]);
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 bg-background text-foreground">
+        <TooltipProvider delay={200}><div className="flex-1 flex flex-col min-h-0 bg-background text-foreground">
             <AdminHeader
                 title="Monitoreo de Pantallas"
                 subtitle="Terminales y puntos de emisión"
@@ -156,28 +219,54 @@ export default function ScreensPage() {
             />
 
             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <div className="px-6 lg:px-10 pt-6 pb-4 flex flex-wrap items-center gap-3">
-                    <Tabs value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
-                        <TabsList>
-                            <TabsTrigger value="all">Todos</TabsTrigger>
-                            <TabsTrigger value="online">Online</TabsTrigger>
-                            <TabsTrigger value="pending">Pendientes</TabsTrigger>
-                            <TabsTrigger value="offline">Offline</TabsTrigger>
-                        </TabsList>
-                    </Tabs>
-
-                    <div className="relative flex-1 min-w-[200px] max-w-md">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar pantalla…" className="pl-9 h-9" />
-                    </div>
-
-                    <div className="ml-auto">
-                        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grid' | 'table')}>
-                            <TabsList>
-                                <TabsTrigger value="table" className="gap-1.5"><List className="size-3.5" /> Tabla</TabsTrigger>
-                                <TabsTrigger value="grid" className="gap-1.5"><LayoutGrid className="size-3.5" /> Grilla</TabsTrigger>
+                {/* Filter tabs + search + view */}
+                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b">
+                    <div className="px-6 lg:px-10 py-3 flex flex-wrap items-center gap-3">
+                        <Tabs value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
+                            <TabsList variant="line" className="h-9 bg-transparent border-b-0 p-0">
+                                <TabsTrigger value="online" className="gap-1.5 px-3 h-9 text-[12px] data-[state=active]:text-emerald-500">
+                                    <span className="size-1.5 rounded-full bg-emerald-500 pf-pulse-dot" />
+                                    Online
+                                    <Badge variant="secondary" className="h-4 px-1 text-[10px] font-mono tabular-nums bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                        {screens.filter(s => Date.now() - new Date(s.lastSeen).getTime() < ONLINE_THRESHOLD_MS).length}
+                                    </Badge>
+                                </TabsTrigger>
+                                <TabsTrigger value="offline" className="gap-1.5 px-3 h-9 text-[12px]">
+                                    <WifiOff className="size-3 text-rose-500" /> Offline
+                                    <Badge variant="secondary" className="h-4 px-1 text-[10px] font-mono tabular-nums">
+                                        {screens.filter(s => s.isAuthorized && Date.now() - new Date(s.lastSeen).getTime() >= ONLINE_THRESHOLD_MS).length}
+                                    </Badge>
+                                </TabsTrigger>
+                                <TabsTrigger value="pending" className="gap-1.5 px-3 h-9 text-[12px]">
+                                    <ShieldAlert className="size-3 text-amber-500" /> Pendientes
+                                    <Badge variant="secondary" className="h-4 px-1 text-[10px] font-mono tabular-nums bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                        {screens.filter(s => !s.isAuthorized).length}
+                                    </Badge>
+                                </TabsTrigger>
+                                <TabsTrigger value="all" className="gap-1.5 px-3 h-9 text-[12px] text-muted-foreground">
+                                    <Circle className="size-3" /> Todos
+                                    <Badge variant="outline" className="h-4 px-1 text-[10px] font-mono tabular-nums">{screens.length}</Badge>
+                                </TabsTrigger>
                             </TabsList>
                         </Tabs>
+
+                        <div className="relative flex-1 min-w-[200px] max-w-md">
+                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o ID..." className="pl-8 h-9" />
+                        </div>
+
+                        <div className="ml-auto flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <span className={"size-1.5 rounded-full " + (connected ? "bg-emerald-500 pf-pulse-dot" : "bg-rose-500")} />
+                                {connected ? 'Conectado' : 'Reconectando…'}
+                            </div>
+                            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grid' | 'table' | 'calendar')}>
+                                <TabsList>
+                                    <TabsTrigger value="table" className="gap-1.5"><List className="size-3.5" /> Tabla</TabsTrigger>
+                                    <TabsTrigger value="grid" className="gap-1.5"><LayoutGrid className="size-3.5" /> Grilla</TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                        </div>
                     </div>
                 </div>
 
@@ -195,10 +284,23 @@ export default function ScreensPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Terminal</TableHead>
-                                        <TableHead className="w-[120px]">Estado</TableHead>
-                                        <TableHead className="w-[140px]">Resolución</TableHead>
-                                        <TableHead className="w-[240px]">Diseño asignado</TableHead>
+                                        <TableHead>
+                                            <Tooltip><TooltipTrigger><span className="cursor-help">Terminal</span></TooltipTrigger><TooltipContent>Nombre y ID único del dispositivo</TooltipContent></Tooltip>
+                                        </TableHead>
+                                        <TableHead className="w-[110px]">
+                                            <Tooltip><TooltipTrigger><span className="cursor-help">Estado</span></TooltipTrigger><TooltipContent>Online si envió heartbeat en los últimos 15 s</TooltipContent></Tooltip>
+                                        </TableHead>
+                                        <TableHead className="w-[150px]">
+                                            <Tooltip><TooltipTrigger><span className="cursor-help">Navegador</span></TooltipTrigger><TooltipContent>Browser detectado desde el User-Agent</TooltipContent></Tooltip>
+                                        </TableHead>
+                                        <TableHead className="w-[130px]">
+                                            <Tooltip><TooltipTrigger><span className="cursor-help">IP</span></TooltipTrigger><TooltipContent>Dirección IP desde donde se conectó por última vez</TooltipContent></Tooltip>
+                                        </TableHead>
+                                        <TableHead className="w-[140px]">
+                                            <Tooltip><TooltipTrigger><span className="cursor-help">Resolución</span></TooltipTrigger><TooltipContent>Viewport reportado por el player</TooltipContent></Tooltip>
+                                        </TableHead>
+                                        <TableHead className="w-[240px]">Diseño por defecto</TableHead>
+                                        <TableHead className="w-[120px]">Timeout</TableHead>
                                         <TableHead className="w-[160px]">Autorización</TableHead>
                                         <TableHead className="w-[140px] text-right">Acciones</TableHead>
                                     </TableRow>
@@ -221,6 +323,37 @@ export default function ScreensPage() {
                                                 </TableCell>
                                                 <TableCell><StatusBadge online={isOnline} /></TableCell>
                                                 <TableCell>
+                                                    {(() => {
+                                                        const ua = parseUA(s.userAgent);
+                                                        return (
+                                                            <Tooltip>
+                                                                <TooltipTrigger>
+                                                                    <div className="flex items-center gap-1.5 cursor-help">
+                                                                        <span className="text-base leading-none">{BROWSER_ICON[ua.browser] || BROWSER_ICON.Unknown}</span>
+                                                                        <div className="min-w-0">
+                                                                            <div className="text-[12px] font-medium leading-tight truncate">{ua.browser}{ua.version && ' ' + ua.version}</div>
+                                                                            {ua.os && <div className="text-[10px] text-muted-foreground leading-tight">{ua.os}</div>}
+                                                                        </div>
+                                                                    </div>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent className="max-w-md break-all"><span className="font-mono text-[10px]">{s.userAgent || '(sin User-Agent)'}</span></TooltipContent>
+                                                            </Tooltip>
+                                                        );
+                                                    })()}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {s.ipAddress ? (
+                                                        <Tooltip>
+                                                            <TooltipTrigger>
+                                                                <span className="font-mono text-[11px] tabular-nums cursor-help">{s.ipAddress.replace(/^::ffff:/, '').replace(/^::1$/, 'localhost')}</span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Última IP desde la que se conectó el player</TooltipContent>
+                                                        </Tooltip>
+                                                    ) : (
+                                                        <span className="text-[12px] text-muted-foreground">—</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
                                                     {s.viewport ? (
                                                         <span className="font-mono text-[12px] tabular-nums">{s.viewport.width}×{s.viewport.height}</span>
                                                     ) : (
@@ -228,14 +361,36 @@ export default function ScreensPage() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Select value={s.lastLayoutId || ''} onValueChange={(v) => handleAssignLayout(s.screenId, v || '')}>
-                                                        <SelectTrigger className="h-8">
-                                                            <SelectValue placeholder="— Ninguno —" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {layouts.map((l) => (<SelectItem key={l._id} value={l._id}>{l.name}</SelectItem>))}
-                                                        </SelectContent>
-                                                    </Select>
+                                                    {(() => {
+                                                        const assigned = layouts.find(l => l._id === s.lastLayoutId);
+                                                        return (
+                                                            <Select value={s.lastLayoutId || 'NONE'} onValueChange={(v) => handleAssignLayout(s.screenId, (!v || v === 'NONE') ? '' : v)}>
+                                                                <SelectTrigger className="h-8">
+                                                                    <span className="truncate text-[12px]">
+                                                                        {assigned ? assigned.name : <span className="text-muted-foreground">— Ninguno —</span>}
+                                                                    </span>
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="NONE"><span className="text-muted-foreground">— Ninguno —</span></SelectItem>
+                                                                    {layouts.map((l) => (<SelectItem key={l._id} value={l._id}>{l.name}</SelectItem>))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        );
+                                                    })()}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-1">
+                                                        <Input
+                                                            type="number"
+                                                            min={3}
+                                                            max={600}
+                                                            value={Math.round((s.idleTimeoutMs || 20000) / 1000)}
+                                                            onChange={(e) => handleUpdateIdleTimeout(s.screenId, parseInt(e.target.value) || 20)}
+                                                            className="h-8 w-16 text-xs font-mono"
+                                                            title="Tiempo (seg) antes de volver al diseño por defecto"
+                                                        />
+                                                        <span className="text-[11px] text-muted-foreground">s</span>
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     {s.isAuthorized ? (
@@ -247,7 +402,7 @@ export default function ScreensPage() {
                                                 <TableCell>
                                                     <div className="flex justify-end gap-1">
                                                         {s.isAuthorized ? (
-                                                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => setRevokeId(s.screenId)} title="Revocar">
+                                                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => setRevokeId(s.screenId)} title="Revocar autorizacion">
                                                                 <Power className="size-4" />
                                                             </Button>
                                                         ) : (
@@ -255,6 +410,9 @@ export default function ScreensPage() {
                                                                 <Shield className="size-3.5" /> Autorizar
                                                             </Button>
                                                         )}
+                                                        <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => setToDelete(s)} title="Eliminar pantalla">
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
                                                         <Button variant="ghost" size="icon" className="size-8" onClick={() => copyPlayerUrl(s.screenId)} title="Copiar URL">
                                                             <LinkIcon className="size-4" />
                                                         </Button>
@@ -358,9 +516,26 @@ export default function ScreensPage() {
                 </AlertDialogContent>
             </AlertDialog>
 
+            <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Eliminar pantalla?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Se eliminara <b>{toDelete?.name || toDelete?.screenId}</b> del sistema. Si estaba conectada, se desconectara y quedara sin autorizar. Esta accion no borra los diseños asociados.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Eliminar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             <Toaster />
         </div>
-    );
+    </TooltipProvider>);
 }
 
 const StatusBadge: React.FC<{ online: boolean }> = ({ online }) => (
@@ -376,6 +551,24 @@ const StatusBadge: React.FC<{ online: boolean }> = ({ online }) => (
         </Badge>
     )
 );
+
+const StatPill: React.FC<{ icon: React.ReactNode; label: string; value: number; tint: 'muted' | 'emerald' | 'amber' | 'rose' }> = ({ icon, label, value, tint }) => {
+    const styles: Record<string, string> = {
+        muted:   'border-border bg-card text-muted-foreground',
+        emerald: 'border-emerald-500/25 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400',
+        amber:   'border-amber-500/25 bg-amber-500/5 text-amber-700 dark:text-amber-400',
+        rose:    'border-rose-500/25 bg-rose-500/5 text-rose-700 dark:text-rose-400',
+    };
+    return (
+        <div className={'rounded-lg border px-3.5 py-2.5 flex items-center gap-2.5 transition-colors ' + styles[tint]}>
+            <span className="shrink-0 opacity-80">{icon}</span>
+            <div className="flex flex-col min-w-0">
+                <span className="text-[10px] uppercase tracking-[0.14em] font-semibold opacity-70 truncate">{label}</span>
+                <span className="font-mono text-lg font-bold tabular-nums leading-none">{value}</span>
+            </div>
+        </div>
+    );
+};
 
 const EmptyState: React.FC<{ total: number; title: string; description: string }> = ({ total, title, description }) => (
     <div className="px-6 lg:px-10 pb-10">

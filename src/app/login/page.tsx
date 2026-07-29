@@ -73,7 +73,7 @@ export default function LoginPage() {
             <motion.div
                 initial={mounted ? { opacity: 0, y: 16 } : false}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 className="w-full max-w-md relative z-1"
             >
                 <div

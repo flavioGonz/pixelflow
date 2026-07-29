@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useContainerSize } from '@/hooks/useContainerSize';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { Calendar, Sparkles } from 'lucide-react';
 
@@ -21,6 +22,8 @@ interface ActivitiesWidgetProps {
 }
 
 const ActivitiesWidget: React.FC<ActivitiesWidgetProps> = ({ data }) => {
+    const [wrapRef, , h] = useContainerSize<HTMLDivElement>();
+    const zoomFactor = Math.max(0.55, Math.min(2.2, (h || 720) / 900));
     // Filter by specific section if selected
     const filteredItems = data.items?.filter(item => {
         if (data.sectionToShow && data.sectionToShow !== 'ALL') {
@@ -49,9 +52,11 @@ const ActivitiesWidget: React.FC<ActivitiesWidgetProps> = ({ data }) => {
 
     return (
         <motion.div
+            ref={wrapRef}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="w-full h-full text-white p-6 md:p-10 flex flex-col overflow-hidden relative bg-transparent font-sans"
+            style={{ zoom: zoomFactor }}
         >
             {/* Minimal Background Pattern */}
             <div className="absolute inset-0 opacity-[0.02] pointer-events-none"

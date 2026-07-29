@@ -22,6 +22,11 @@ const widgetMap: Record<WidgetType, any> = {
     ATMOSPHERE: dynamic(() => import('../widgets/AtmosphereWidget'), { ssr: false }),
     FLIGHT_BOARD: dynamic(() => import('../widgets/FlightBoardWidget'), { ssr: false }),
     MUSIC_PLAYER: dynamic(() => import('../widgets/MusicPlayerWidget'), { ssr: false }),
+    DATA_TABLE: dynamic(() => import('../widgets/DataTableWidget'), { ssr: false }),
+    SENSOR_VALUE: dynamic(() => import('../widgets/SensorValueWidget'), { ssr: false }),
+    IMAGE: dynamic(() => import('../widgets/ImageWidget'), { ssr: false }),
+    WIFI_INFO: dynamic(() => import('../widgets/WifiWidget'), { ssr: false }),
+    FEEDBACK: dynamic(() => import('../widgets/FeedbackWidget'), { ssr: false }),
 };
 
 interface WidgetRendererProps { widget: WidgetConfig; }

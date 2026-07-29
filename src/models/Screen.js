@@ -13,6 +13,11 @@ const ScreenSchema = new mongoose.Schema({
         orientation: { type: String, default: 'landscape' },
     },
     userAgent: { type: String, default: '' },
+    ipAddress: { type: String, default: '' },
+    idleTimeoutMs: { type: Number, default: 20000 },
+    // Screensaver settings
+    screensaverEnabled: { type: Boolean, default: false },
+    screensaverRotateMs: { type: Number, default: 10000 },
 });
 
 module.exports = mongoose.models.Screen || mongoose.model('Screen', ScreenSchema);

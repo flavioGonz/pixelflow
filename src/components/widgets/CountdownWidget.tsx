@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Calendar, Bell, ChevronRight } from 'lucide-react';
+import { ScaleFit } from '@/components/shared/ScaleFit';
 
 interface CountdownWidgetProps {
     data: {
@@ -83,7 +84,8 @@ const CountdownWidget: React.FC<CountdownWidgetProps> = ({ data }) => {
     };
 
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-6 md:p-12 text-center bg-black rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden relative group font-sans">
+        <ScaleFit designWidth={640} designHeight={400}>
+            <div className="w-[640px] h-[400px] flex flex-col items-center justify-center p-6 md:p-12 text-center bg-black rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden relative group font-sans">
 
             {/* Mesh Gradient Background */}
             <div className="absolute inset-0 opacity-40 pointer-events-none">
@@ -200,7 +202,8 @@ const CountdownWidget: React.FC<CountdownWidgetProps> = ({ data }) => {
             {/* Corner Decorative Elements */}
             <div className="absolute top-8 left-8 p-4 border-t-2 border-l-2 opacity-20 rounded-tl-xl" style={{ borderColor: accentColor }} />
             <div className="absolute bottom-8 right-8 p-4 border-b-2 border-r-2 opacity-20 rounded-br-xl" style={{ borderColor: accentColor }} />
-        </div>
+            </div>
+        </ScaleFit>
     );
 };
 

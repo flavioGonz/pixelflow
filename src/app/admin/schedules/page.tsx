@@ -102,8 +102,8 @@ export default function SchedulesAdminPage() {
     return (
         <div className="flex-1 flex flex-col min-h-0 bg-background text-foreground">
             <AdminHeader
-                title="Cronogramas"
-                subtitle="Automatización de canales"
+                title="Rutinas de pantalla"
+                subtitle="Programación de que muestra cada pantalla en cada momento"
                 icon={<Calendar size={20} strokeWidth={1.75} />}
                 actions={
                     <Button onClick={() => setShowCreateModal(true)} size="sm">

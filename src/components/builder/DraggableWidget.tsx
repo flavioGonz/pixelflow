@@ -5,6 +5,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { WidgetConfig } from '@/store/usePlayerStore';
 import { GripVertical, Trash2, Settings, Lock } from 'lucide-react';
+import WidgetRenderer from '@/components/shared/WidgetRenderer';
 
 interface DraggableWidgetProps {
     widget: WidgetConfig;
@@ -126,16 +127,9 @@ export function DraggableWidget({
                 </div>
             </div>
 
-            {/* Placeholder content */}
-            <div className="w-full h-full flex items-center justify-center bg-muted/30 rounded-md pointer-events-none">
-                <span className="text-muted-foreground/70 font-medium text-xs uppercase tracking-[0.18em]">
-                    {widget.type === 'PRICE_LIST' ? 'Lista de Precios' :
-                        widget.type === 'PRODUCT_LIST' ? 'Productos' :
-                            widget.type === 'ACTIVITIES' ? 'Cronograma' :
-                                widget.type === 'QR_CODE' ? 'Código QR' :
-                                    widget.type === 'CATEGORY_NAV' ? 'Categorías/Nav' :
-                                        widget.type}
-                </span>
+            {/* Live preview — actual widget rendered, but non-interactive so drag/select still works from the chrome */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-sm">
+                <WidgetRenderer widget={widget} />
             </div>
 
             {/* Dimensions tag (visible while selected) */}

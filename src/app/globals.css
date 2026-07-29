@@ -514,3 +514,38 @@ html:not(.dark) .hover\:border-neutral-700:hover { border-color: #d4d4d8 !import
 
 /* Shadows that produce dark halos around panels — tone them down */
 html:not(.dark) .shadow-\[0_0_100px_rgba\(0\,0\,0\,0\.5\)\] { box-shadow: 0 0 60px rgba(0,0,0,0.08) !important; }
+
+
+/* CategoryNavWidget in admin canvas: hide swiper arrows / reduce visual noise */
+.pf-cat-nav-admin .swiper-button-prev,
+.pf-cat-nav-admin .swiper-button-next {
+    display: none !important;
+}
+
+
+/* CategoryNavWidget: honor per-widget item gap via --pf-item-gap */
+.pf-cat-nav > div,
+.pf-cat-nav .swiper-wrapper {
+    gap: var(--pf-item-gap, 12px) !important;
+}
+.pf-cat-nav [class*="grid-cols"],
+.pf-cat-nav [class*="grid grid"] {
+    gap: var(--pf-item-gap, 12px) !important;
+}
+.pf-cat-nav .swiper-slide {
+    margin-right: var(--pf-item-gap, 12px) !important;
+}
+.pf-cat-nav [class*="gap-"] {
+    gap: var(--pf-item-gap, 12px) !important;
+}
+
+
+/* Tab content enter animation */
+[data-slot="tabs-content"] {
+    animation: pf-tab-anim 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes pf-tab-anim {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+:root { --pf-build-id: 1785324574; }

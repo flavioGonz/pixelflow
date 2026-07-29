@@ -42,23 +42,25 @@ export default function RootLayout({
                     dangerouslySetInnerHTML={{
                         __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                window.addEventListener('load', async function() {
+                  try {
+                    // Step 1: unregister any old SWs (only if they are NOT already pf-sw-v5)
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (const reg of regs) {
+                      const url = reg.active && reg.active.scriptURL;
+                      if (url && !url.endsWith('/pf-sw-v5.js')) {
+                        console.log('Unregistering old SW:', url);
+                        await reg.unregister();
+                      }
+                    }
+                    // Step 2: register the new one at a STATIC url (no timestamp — otherwise every reload registers a new SW)
+                    const registration = await navigator.serviceWorker.register('/pf-sw-v5.js');
                     console.log('SW Registered with scope:', registration.scope);
-                    setInterval(() => { registration.update(); }, 60000);
-                    if (registration.waiting) {
-                        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                    }
-                  }).catch(function(err) {
+                    // NOTE: NO controllerchange -> reload here — that caused a reload loop.
+                    // The new SW takes over on next natural navigation.
+                  } catch (err) {
                     console.log('SW Registration Failed', err);
-                  });
-                  let refreshing = false;
-                  navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (!refreshing) {
-                      window.location.reload();
-                      refreshing = true;
-                    }
-                  });
+                  }
                 });
               }
             `,

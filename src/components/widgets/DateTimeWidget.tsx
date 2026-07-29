@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { ScaleFit } from '@/components/shared/ScaleFit';
 
 interface DateTimeWidgetProps {
     data: {
@@ -46,7 +47,7 @@ const DateTimeWidget: React.FC<DateTimeWidgetProps> = ({ data = {} }) => {
 
     if (style === 'card') {
         return (
-            <div className="w-full h-full flex items-center justify-center bg-transparent">
+            <ScaleFit>
                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-6 rounded-2xl flex flex-col items-center gap-2 shadow-2xl">
                     <span className="text-xs font-black uppercase tracking-[0.3em] text-white/60">{dayNameUpper}</span>
                     <div className="flex items-baseline gap-2 leading-none" style={{ color: textColor }}>
@@ -61,13 +62,13 @@ const DateTimeWidget: React.FC<DateTimeWidgetProps> = ({ data = {} }) => {
                         <span className="text-sm font-bold uppercase tracking-widest text-white/80">{dateNum} DE {monthUpper}</span>
                     )}
                 </div>
-            </div>
+            </ScaleFit>
         );
     }
 
     if (style === 'neon') {
         return (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-transparent">
+            <ScaleFit>
                 <div className="relative group">
                     <div className="absolute -inset-4 bg-blue-500/20 blur-xl rounded-full opacity-50 group-hover:opacity-100 transition-opacity animate-pulse" style={{ backgroundColor: `${textColor}44` }} />
                     <div className="flex items-baseline gap-2 relative z-10" style={{ color: textColor, textShadow: `0 0 20px ${textColor}` }}>
@@ -78,13 +79,13 @@ const DateTimeWidget: React.FC<DateTimeWidgetProps> = ({ data = {} }) => {
                 {showDate && (
                     <span className="mt-4 text-sm font-black uppercase tracking-[0.5em] text-white/50 relative z-10">{dayNameUpper}, {dateNum} {monthUpper}</span>
                 )}
-            </div>
+            </ScaleFit>
         );
     }
 
     if (style === 'ios') {
         return (
-            <div className="w-full h-full flex items-center justify-center bg-transparent">
+            <ScaleFit>
                 <div className="bg-white/5 backdrop-blur-3xl border border-white/10 p-10 rounded-[2.5rem] flex flex-col items-center gap-1 shadow-2xl relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none" />
                     <span className="text-xs font-medium uppercase tracking-[0.2em] text-white/50 mb-2">{dayNameUpper}</span>
@@ -96,13 +97,13 @@ const DateTimeWidget: React.FC<DateTimeWidgetProps> = ({ data = {} }) => {
                         <span className="text-sm font-medium text-white/70 mt-3">{dateNum} {monthUpper}</span>
                     )}
                 </div>
-            </div>
+            </ScaleFit>
         );
     }
 
     if (style === 'retro') {
         return (
-            <div className="w-full h-full flex items-center justify-center bg-transparent">
+            <ScaleFit>
                 <div className="border-2 border-white/10 p-8 rounded-xl bg-white/5 backdrop-blur-md shadow-2xl relative overflow-hidden">
                     <div className="absolute inset-0 pointer-events-none opacity-10" style={{ backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%' }} />
                     <div style={{ fontFamily: 'monospace', color: textColor === '#ffffff' ? '#10b981' : textColor }} className="flex flex-col items-center">
@@ -110,13 +111,13 @@ const DateTimeWidget: React.FC<DateTimeWidgetProps> = ({ data = {} }) => {
                         {showDate && <span className="text-sm mt-4 uppercase tracking-[0.5em] opacity-60">{dateNum}-{monthUpper}</span>}
                     </div>
                 </div>
-            </div>
+            </ScaleFit>
         );
     }
 
     if (style === 'elegant') {
         return (
-            <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-transparent">
+            <ScaleFit>
                 <div className="flex flex-col items-center relative">
                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-[10rem] font-serif opacity-5 select-none pointer-events-none" style={{ color: textColor }}>&</div>
                     <span className="text-xl font-serif italic tracking-widest mb-4 opacity-70" style={{ color: textColor }}>{dayNameUpper}</span>
@@ -129,13 +130,13 @@ const DateTimeWidget: React.FC<DateTimeWidgetProps> = ({ data = {} }) => {
                         <span className="text-xs font-black uppercase tracking-[0.4em] mt-6 opacity-40">{dateNum} . {monthUpper}</span>
                     )}
                 </div>
-            </div>
+            </ScaleFit>
         );
     }
 
     // Minimal (Default)
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-transparent">
+        <ScaleFit>
             <div className="flex flex-col items-center text-center">
                 <span className="text-8xl font-black tracking-tighter leading-none" style={{ color: textColor }}>
                     {hours}:{minutes}
@@ -147,7 +148,7 @@ const DateTimeWidget: React.FC<DateTimeWidgetProps> = ({ data = {} }) => {
                     </span>
                 )}
             </div>
-        </div>
+        </ScaleFit>
     );
 };
 

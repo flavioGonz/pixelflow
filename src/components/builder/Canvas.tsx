@@ -15,6 +15,7 @@ export interface CanvasProps {
     onSelect: (id: string | null) => void;
     onOpenProperties?: (widget: WidgetConfig) => void;
     orientation: 'landscape' | 'portrait';
+    resolution?: { width: number; height: number };
     backgroundImage?: string;
     backgroundVideo?: string;
     backgroundColor?: string;
@@ -57,6 +58,7 @@ export function Canvas({
     onSelect,
     onOpenProperties,
     orientation,
+    resolution,
     backgroundImage,
     backgroundVideo,
     backgroundColor = '#000',
@@ -69,6 +71,8 @@ export function Canvas({
     showGrid = true,
 }: CanvasProps) {
     const canvasRef = React.useRef<HTMLDivElement>(null);
+    const wrapperRef = React.useRef<HTMLDivElement>(null);
+    const [canvasSize, setCanvasSize] = React.useState<{ w: number; h: number }>({ w: 0, h: 0 });
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: { distance: 4 },
@@ -84,6 +88,8 @@ export function Canvas({
         startY: number;
         startWidget: WidgetConfig;
     } | null>(null);
+
+
 
     // Track shift key for free-drag (snap bypass)
     React.useEffect(() => {
@@ -311,7 +317,36 @@ export function Canvas({
 
     // ------------------------------------------------------------
 
-    const aspectRatio = orientation === 'landscape' ? 'aspect-video' : 'aspect-[9/16]';
+    // Prefer explicit resolution; fall back to orientation defaults.
+    const arW = resolution?.width || (orientation === 'landscape' ? 1920 : 1080);
+    const arH = resolution?.height || (orientation === 'landscape' ? 1080 : 1920);
+    const canvasAspect = arW + ' / ' + arH;
+
+    // Auto-fit canvas to available viewport while preserving aspect ratio
+    React.useEffect(() => {
+        const el = wrapperRef.current;
+        if (!el) return;
+        const target = arW / arH;
+        const compute = () => {
+            const rect = el.getBoundingClientRect();
+            const cw = Math.max(0, rect.width - 16);   // leave a tiny breathing room
+            const ch = Math.max(0, rect.height - 16);
+            if (cw <= 0 || ch <= 0) return;
+            let w, h;
+            if (cw / ch > target) {
+                h = ch;
+                w = h * target;
+            } else {
+                w = cw;
+                h = w / target;
+            }
+            setCanvasSize({ w: Math.floor(w), h: Math.floor(h) });
+        };
+        compute();
+        const ro = new ResizeObserver(compute);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [arW, arH]);
 
     const Patterns: Record<string, string> = {
         dots: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
@@ -323,12 +358,12 @@ export function Canvas({
     const youtubeId = backgroundVideo ? getYoutubeId(backgroundVideo) : null;
 
     return (
-        <div className="w-full flex justify-center items-center py-10" onClick={() => onSelect(null)}>
+        <div ref={wrapperRef} className="w-full h-full flex justify-center items-center p-2" onClick={() => onSelect(null)}>
             <div
                 ref={canvasRef}
                 id="builder-canvas"
-                style={{ backgroundColor }}
-                className={'relative rounded-md border-2 border-dashed w-full max-w-4xl overflow-hidden shadow-xl ring-1 ring-border ' + aspectRatio}
+                style={{ backgroundColor, width: canvasSize.w || '80%', height: canvasSize.h || 'auto', aspectRatio: canvasAspect }}
+                className={'relative rounded-md border border-dashed border-primary/30 overflow-hidden shadow-2xl ring-1 ring-border'}
                 onDragOver={(e) => {
                     const types = Array.from(e.dataTransfer.types);
                     if (types.includes('application/x-pixelflow-widget')) {

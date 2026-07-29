@@ -6,13 +6,20 @@ import { motion } from 'framer-motion';
 interface VideoWidgetProps {
     data: {
         url: string;
-        muted?: boolean;
+        // legacy lowercase support:
         autoplay?: boolean;
+        // new camelCase from admin panel:
+        autoPlay?: boolean;
+        muted?: boolean;
         loop?: boolean;
+        showControls?: boolean;
+        fit?: 'cover' | 'contain' | 'fill';
+        playbackRate?: number;
     };
 }
 
 const VideoWidget: React.FC<VideoWidgetProps> = ({ data }) => {
+    const videoRef = React.useRef<HTMLVideoElement>(null);
     const getYoutubeId = (url: string) => {
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
         const match = url.match(regExp);
@@ -20,6 +27,20 @@ const VideoWidget: React.FC<VideoWidgetProps> = ({ data }) => {
     };
 
     const youtubeId = getYoutubeId(data.url);
+    const autoPlay = data.autoPlay ?? data.autoplay ?? true;
+    const muted = data.muted ?? true;
+    const loop = data.loop ?? true;
+    const showControls = !!data.showControls;
+    const fit = data.fit || 'cover';
+    const playbackRate = data.playbackRate ?? 1;
+
+    // Apply playbackRate when video loads or rate changes.
+    React.useEffect(() => {
+        const v = videoRef.current;
+        if (v) v.playbackRate = playbackRate;
+    }, [playbackRate, data.url]);
+
+    const fitClass = fit === 'contain' ? 'object-contain' : fit === 'fill' ? 'object-fill' : 'object-cover';
 
     return (
         <motion.div
@@ -30,19 +51,21 @@ const VideoWidget: React.FC<VideoWidgetProps> = ({ data }) => {
             {youtubeId ? (
                 <iframe
                     className="w-full h-full"
-                    src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&loop=1&playlist=${youtubeId}&controls=0&modestbranding=1`}
+                    src={`https://www.youtube.com/embed/${youtubeId}?autoplay=${autoPlay ? 1 : 0}&mute=${muted ? 1 : 0}&loop=${loop ? 1 : 0}&playlist=${youtubeId}&controls=${showControls ? 1 : 0}&modestbranding=1`}
                     frameBorder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                 />
             ) : (
                 <video
+                    ref={videoRef}
                     src={data.url}
-                    muted={data.muted !== false}
-                    autoPlay={data.autoplay !== false}
-                    loop={data.loop !== false}
+                    muted={muted}
+                    autoPlay={autoPlay}
+                    loop={loop}
+                    controls={showControls}
                     playsInline
-                    className="w-full h-full object-cover"
+                    className={"w-full h-full " + fitClass}
                 />
             )}
         </motion.div>

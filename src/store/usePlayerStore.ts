@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type WidgetType = 'VIDEO' | 'PRICE_LIST' | 'SLIDER' | 'TEXT' | 'WEATHER' | 'ACTIVITIES' | 'PRODUCT_LIST' | 'QR_CODE' | 'CATEGORY_NAV' | 'NAV_BUTTON' | 'DATE_TIME' | 'TICKER' | 'SOCIAL_FEED' | 'COUNTDOWN' | 'ATMOSPHERE' | 'FLIGHT_BOARD' | 'MUSIC_PLAYER';
+export type WidgetType = 'VIDEO' | 'PRICE_LIST' | 'SLIDER' | 'TEXT' | 'WEATHER' | 'ACTIVITIES' | 'PRODUCT_LIST' | 'QR_CODE' | 'CATEGORY_NAV' | 'NAV_BUTTON' | 'DATE_TIME' | 'TICKER' | 'SOCIAL_FEED' | 'COUNTDOWN' | 'ATMOSPHERE' | 'DATA_TABLE' | 'SENSOR_VALUE' | 'FLIGHT_BOARD' | 'MUSIC_PLAYER' | 'IMAGE' | 'WIFI_INFO' | 'FEEDBACK';
 
 export interface WidgetConfig {
     id: string;
@@ -28,6 +28,13 @@ export interface LayoutJSON {
     backgroundOverlayOpacity?: number;
     backgroundPattern?: 'none' | 'dots' | 'grid' | 'waves' | 'noise';
     backgroundPatternOpacity?: number;
+    transition?: string;
+    transitionDuration?: number;
+    // Target design resolution — optional metadata used by Studio to help the designer.
+    // Runtime uses % positions so this does NOT affect rendering.
+    designWidth?: number;
+    designHeight?: number;
+    targetDPI?: number;
 }
 
 interface PlayerState {
@@ -37,6 +44,8 @@ interface PlayerState {
     isAuthorized: boolean;
     selectedCategory: string;
     history: string[];
+    navDirection: 'push' | 'pop' | 'none';
+    setNavDirection: (d: 'push' | 'pop' | 'none') => void;
     setScreenId: (id: string) => void;
     setLayout: (layout: LayoutJSON) => void;
     setConnected: (connected: boolean) => void;
@@ -53,6 +62,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     isAuthorized: false,
     selectedCategory: 'TODOS',
     history: [],
+    navDirection: 'none',
+    setNavDirection: (d) => set({ navDirection: d }),
     setScreenId: (id) => set({ screenId: id }),
     setLayout: (layout) => set({ layout }),
     setConnected: (connected) => set({ isConnected: connected }),

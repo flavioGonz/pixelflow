@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,6 +14,7 @@ export default function AdminLayout({
 }) {
     const [sidebarExpanded, setSidebarExpanded] = useState(false);
     const [hydrated, setHydrated] = useState(false);
+    const pathname = usePathname();
 
     useEffect(() => {
         try {
@@ -30,17 +32,22 @@ export default function AdminLayout({
         });
     }, []);
 
+    // Special-case Studio so the editor doesn't get exit/enter animation on save reloads.
+    // Also disable transition on the editor since its own children have heavy animations.
+    const isStudio = pathname === '/admin';
+
     return (
         <div className="h-screen flex font-sans overflow-hidden bg-background text-foreground">
             <AdminSidebar expanded={sidebarExpanded} onToggle={toggleSidebar} />
 
             <main className="flex-1 flex flex-col min-w-0 relative overflow-hidden">
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait" initial={false}>
                     <motion.div
-                        key="content"
-                        initial={hydrated ? { opacity: 0, x: 12 } : false}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+                        key={pathname}
+                        initial={hydrated && !isStudio ? { opacity: 0, y: 8, filter: 'blur(6px)' } : false}
+                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                        exit={hydrated && !isStudio ? { opacity: 0, y: -6, filter: 'blur(4px)' } : undefined}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                         className="flex-1 flex flex-col overflow-hidden"
                     >
                         {children}

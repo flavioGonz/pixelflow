@@ -1,0 +1,26 @@
+const mongoose = require('mongoose');
+
+const MediaItemSchema = new mongoose.Schema({
+    type: { type: String, enum: ['image', 'video'], required: true },
+    url: { type: String, required: true },
+    durationMs: { type: Number, default: 8000 },
+}, { _id: false });
+
+const ScreensaverSchema = new mongoose.Schema({
+    enabled: { type: Boolean, default: false },
+    idleMs: { type: Number, default: 30000 },
+    rotateMs: { type: Number, default: 10000 },
+    layoutIds: [{ type: String }],
+    layoutDurationsMs: { type: mongoose.Schema.Types.Mixed, default: {} },
+    mediaItems: [MediaItemSchema],
+}, { _id: false });
+
+const SettingsSchema = new mongoose.Schema({
+    key: { type: String, unique: true, default: 'global' },
+    screensaver: { type: ScreensaverSchema, default: () => ({}) },
+    updatedAt: { type: Date, default: Date.now },
+});
+
+SettingsSchema.pre('save', function (next) { this.updatedAt = Date.now(); next(); });
+
+module.exports = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);

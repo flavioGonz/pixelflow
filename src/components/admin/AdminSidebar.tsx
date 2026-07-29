@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import LayoutIcon from 'lucide-react/dist/esm/icons/layout';
 import ShoppingBag from 'lucide-react/dist/esm/icons/shopping-bag';
 import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw';
@@ -11,10 +11,13 @@ import Calendar from 'lucide-react/dist/esm/icons/calendar';
 import Database from 'lucide-react/dist/esm/icons/database';
 import Smartphone from 'lucide-react/dist/esm/icons/smartphone';
 import Network from 'lucide-react/dist/esm/icons/network';
+import Radio from 'lucide-react/dist/esm/icons/radio';
 import Settings2 from 'lucide-react/dist/esm/icons/settings-2';
 import LogOut from 'lucide-react/dist/esm/icons/log-out';
 import ChevronsLeft from 'lucide-react/dist/esm/icons/chevrons-left';
 import ChevronsRight from 'lucide-react/dist/esm/icons/chevrons-right';
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down';
+import Moon from 'lucide-react/dist/esm/icons/moon';
 
 interface AdminSidebarProps {
     expanded: boolean;
@@ -26,26 +29,41 @@ interface MenuItem {
     label: string;
     href: string;
     id: string;
-    section?: 'main' | 'content';
 }
 
-const menuItems: MenuItem[] = [
-    { icon: LayoutIcon, label: 'Studio', href: '/admin', id: 'editor', section: 'main' },
-    { icon: Smartphone, label: 'Pantallas', href: '/admin/screens', id: 'screens', section: 'main' },
-    { icon: Calendar, label: 'Cronograma', href: '/admin/schedules', id: 'schedules', section: 'main' },
-    { icon: Network, label: 'Mapa', href: '/admin/flow', id: 'flow', section: 'main' },
-    { icon: Database, label: 'Diseños', href: '/admin/layouts', id: 'layouts', section: 'content' },
-    { icon: ShoppingBag, label: 'Productos', href: '/admin/products', id: 'products', section: 'content' },
-    { icon: RefreshCw, label: 'Actividades', href: '/admin/activities', id: 'activities', section: 'content' },
+interface Section {
+    id: string;
+    label: string;
+    href?: string; // if present, section header is linkable
+    items: MenuItem[];
+}
+
+const sections: Section[] = [
+    {
+        id: 'operacion',
+        label: 'Operación',
+        items: [
+            { icon: LayoutIcon, label: 'Studio', href: '/admin', id: 'editor' },
+            { icon: Smartphone, label: 'Pantallas', href: '/admin/screens', id: 'screens' },
+            { icon: Calendar, label: 'Rutinas', href: '/admin/schedules', id: 'schedules' },
+            { icon: Network, label: 'Mapa', href: '/admin/flow', id: 'flow' },
+            { icon: Moon, label: 'Screensaver', href: '/admin/screensaver', id: 'screensaver' },
+        ],
+    },
+    {
+        id: 'contenido',
+        label: 'Contenido',
+        href: '/admin/layouts',
+        items: [
+            { icon: Database, label: 'Interfaces', href: '/admin/layouts', id: 'layouts' },
+            { icon: ShoppingBag, label: 'Productos', href: '/admin/products', id: 'products' },
+            { icon: RefreshCw, label: 'Actividades', href: '/admin/activities', id: 'activities' },
+            { icon: Radio, label: 'Sensores', href: '/admin/sensors', id: 'sensors' },
+        ],
+    },
 ];
 
-interface SidebarItemProps {
-    item: MenuItem;
-    expanded: boolean;
-    active: boolean;
-}
-
-const SidebarItem: React.FC<SidebarItemProps> = ({ item, expanded, active }) => {
+const SidebarItem: React.FC<{ item: MenuItem; expanded: boolean; active: boolean }> = ({ item, expanded, active }) => {
     const Icon = item.icon;
     return (
         <Link href={item.href} className="block">
@@ -82,10 +100,116 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ item, expanded, active }) => 
     );
 };
 
+interface CollapsibleSectionProps {
+    section: Section;
+    expanded: boolean;
+    open: boolean;
+    onToggle: () => void;
+    pathname: string;
+}
+
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ section, expanded, open, onToggle, pathname }) => {
+    // Section is "active" if any of its items match pathname
+    const sectionActive = section.items.some((it) => pathname === it.href) || (section.href && pathname === section.href);
+    if (!expanded) {
+        // Collapsed sidebar: no headers, just show icons (as before)
+        return (
+            <div className="flex flex-col gap-0.5 pt-2">
+                {section.items.map((item) => (
+                    <SidebarItem key={item.id} item={item} expanded={false} active={pathname === item.href} />
+                ))}
+            </div>
+        );
+    }
+    const HeaderContent = (
+        <>
+            <span className={"text-[10px] font-bold uppercase tracking-[0.18em] " + (sectionActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')}>
+                {section.label}
+            </span>
+            <motion.span
+                animate={{ rotate: open ? 0 : -90 }}
+                transition={{ duration: 0.2 }}
+                className="ml-auto flex items-center text-muted-foreground group-hover:text-foreground"
+            >
+                <ChevronDown size={12} strokeWidth={2} />
+            </motion.span>
+        </>
+    );
+    return (
+        <div className="pt-3">
+            {section.href ? (
+                <div className="flex items-stretch">
+                    <Link href={section.href} className="flex-1 group flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-accent/50 transition-colors">
+                        <span className={"text-[10px] font-bold uppercase tracking-[0.18em] " + (sectionActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')}>
+                            {section.label}
+                        </span>
+                    </Link>
+                    <button
+                        onClick={onToggle}
+                        aria-label={open ? `Colapsar ${section.label}` : `Expandir ${section.label}`}
+                        className="group px-2 py-1.5 rounded-md hover:bg-accent/50 transition-colors"
+                    >
+                        <motion.span
+                            animate={{ rotate: open ? 0 : -90 }}
+                            transition={{ duration: 0.2 }}
+                            className="flex items-center text-muted-foreground group-hover:text-foreground"
+                        >
+                            <ChevronDown size={12} strokeWidth={2} />
+                        </motion.span>
+                    </button>
+                </div>
+            ) : (
+                <button
+                    onClick={onToggle}
+                    aria-label={open ? `Colapsar ${section.label}` : `Expandir ${section.label}`}
+                    className="group w-full flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-accent/50 transition-colors"
+                >
+                    {HeaderContent}
+                </button>
+            )}
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        className="overflow-hidden"
+                    >
+                        <div className="flex flex-col gap-0.5 pt-1">
+                            {section.items.map((item) => (
+                                <SidebarItem key={item.id} item={item} expanded={true} active={pathname === item.href} />
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+const SECTIONS_STATE_KEY = 'pf:sidebar-sections-open';
+
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ expanded, onToggle }) => {
     const pathname = usePathname();
-    const mainItems = menuItems.filter((m) => m.section === 'main');
-    const contentItems = menuItems.filter((m) => m.section === 'content');
+
+    // Track open/closed state of each section
+    const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => ({ operacion: true, contenido: true }));
+
+    useEffect(() => {
+        try {
+            const v = localStorage.getItem(SECTIONS_STATE_KEY);
+            if (v) setOpenSections((prev) => ({ ...prev, ...JSON.parse(v) }));
+        } catch { /* ignore */ }
+    }, []);
+
+    const toggleSection = (id: string) => {
+        setOpenSections((prev) => {
+            const next = { ...prev, [id]: !prev[id] };
+            try { localStorage.setItem(SECTIONS_STATE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+            return next;
+        });
+    };
 
     return (
         <motion.aside
@@ -116,35 +240,30 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ expanded, onToggle }
             <div className="border-b" />
 
             {/* Sections */}
-            <nav className={"flex-1 overflow-y-auto custom-scrollbar " + (expanded ? 'px-2 pt-3' : 'px-2 pt-2') + ' pb-4'}>
-                <SectionLabel expanded={expanded}>Operación</SectionLabel>
-                <div className="flex flex-col gap-0.5">
-                    {mainItems.map((item) => (
-                        <SidebarItem key={item.id} item={item} expanded={expanded} active={pathname === item.href} />
-                    ))}
-                </div>
-
-                <div className={"mt-4 " + (expanded ? '' : 'border-t pt-2')}>
-                    <SectionLabel expanded={expanded}>Contenido</SectionLabel>
-                    <div className="flex flex-col gap-0.5">
-                        {contentItems.map((item) => (
-                            <SidebarItem key={item.id} item={item} expanded={expanded} active={pathname === item.href} />
-                        ))}
-                    </div>
-                </div>
+            <nav className={"flex-1 overflow-y-auto custom-scrollbar " + (expanded ? 'px-2 pt-1' : 'px-2 pt-2') + ' pb-4'}>
+                {sections.map((section) => (
+                    <CollapsibleSection
+                        key={section.id}
+                        section={section}
+                        expanded={expanded}
+                        open={openSections[section.id] !== false}
+                        onToggle={() => toggleSection(section.id)}
+                        pathname={pathname || ''}
+                    />
+                ))}
             </nav>
 
             {/* Footer */}
             <div className="border-t flex flex-col gap-0.5 py-2">
-                <div className={expanded ? 'px-2' : 'px-2'}>
+                <div className="px-2">
                     <SidebarItem
                         item={{ icon: Settings2, label: 'Configuración', href: '/admin/settings', id: 'settings' }}
                         expanded={expanded}
-                        active={pathname === '/admin/settings'}
+                        active={(pathname || '').startsWith('/admin/settings')}
                     />
                 </div>
 
-                <div className={expanded ? 'px-2' : 'px-2'}>
+                <div className="px-2">
                     <button
                         onClick={async () => {
                             await fetch('/api/auth/logout', { method: 'POST' });
@@ -163,7 +282,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ expanded, onToggle }
                     </button>
                 </div>
 
-                <div className={expanded ? 'px-2 pt-1' : 'px-2 pt-1'}>
+                <div className="px-2 pt-1">
                     <button
                         onClick={onToggle}
                         aria-label={expanded ? 'Colapsar menú' : 'Expandir menú'}
@@ -184,14 +303,5 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ expanded, onToggle }
                 </div>
             </div>
         </motion.aside>
-    );
-};
-
-const SectionLabel: React.FC<{ children: React.ReactNode; expanded: boolean }> = ({ children, expanded }) => {
-    if (!expanded) return <div className="h-1" />;
-    return (
-        <div className="px-3 pt-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-            {children}
-        </div>
     );
 };

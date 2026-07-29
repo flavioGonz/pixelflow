@@ -1,29 +1,52 @@
 'use client';
 
+import * as React from 'react';
 import { LayoutGrid, List } from 'lucide-react';
+import CalendarIcon from 'lucide-react/dist/esm/icons/calendar';
+
+export type ViewMode = 'grid' | 'table' | 'calendar';
 
 interface ViewTogglerProps {
-    viewMode: 'grid' | 'table';
-    setViewMode: (mode: 'grid' | 'table') => void;
+    viewMode: ViewMode;
+    setViewMode: (mode: ViewMode) => void;
+    /** Which modes are available. Defaults to grid+table. */
+    modes?: ViewMode[];
 }
 
-export function ViewToggler({ viewMode, setViewMode }: ViewTogglerProps) {
+const iconMap: Record<ViewMode, React.ElementType> = {
+    grid: LayoutGrid,
+    table: List,
+    calendar: CalendarIcon,
+};
+
+const titleMap: Record<ViewMode, string> = {
+    grid: 'Vista cuadricula',
+    table: 'Vista lista',
+    calendar: 'Vista calendario',
+};
+
+export function ViewToggler({ viewMode, setViewMode, modes = ['grid', 'table'] }: ViewTogglerProps) {
     return (
-        <div className="flex bg-[#111] border border-white/10 rounded-lg p-1">
-            <button
-                onClick={() => setViewMode('grid')}
-                title="Vista Cuadrícula"
-                className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white/10 text-white shadow-sm' : 'text-neutral-500 hover:text-white'}`}
-            >
-                <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-                onClick={() => setViewMode('table')}
-                title="Vista Lista"
-                className={`p-2 rounded-md transition-all ${viewMode === 'table' ? 'bg-white/10 text-white shadow-sm' : 'text-neutral-500 hover:text-white'}`}
-            >
-                <List className="w-4 h-4" />
-            </button>
+        <div className="inline-flex items-center gap-0.5 rounded-md border bg-card p-0.5">
+            {modes.map((m) => {
+                const Icon = iconMap[m];
+                const active = viewMode === m;
+                return (
+                    <button
+                        key={m}
+                        onClick={() => setViewMode(m)}
+                        title={titleMap[m]}
+                        className={
+                            'size-7 grid place-items-center rounded-sm transition-colors ' +
+                            (active
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-accent')
+                        }
+                    >
+                        <Icon className="size-3.5" />
+                    </button>
+                );
+            })}
         </div>
     );
 }

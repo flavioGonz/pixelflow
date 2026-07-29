@@ -41,6 +41,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import { StatPill, InfoTip } from '@/components/admin/StatPill';
+import { CategoryManager } from '@/components/admin/CategoryManager';
+import CheckCircle2 from 'lucide-react/dist/esm/icons/check-circle-2';
+import XCircle from 'lucide-react/dist/esm/icons/x-circle';
+import Info from 'lucide-react/dist/esm/icons/info';
+import LayoutGrid from 'lucide-react/dist/esm/icons/layout-grid';
 
 interface Product {
     _id?: string;
@@ -58,10 +64,11 @@ export default function ProductsPage() {
     const [categories, setCategories] = React.useState<any[]>([]);
     const [search, setSearch] = React.useState('');
     const [filterCat, setFilterCat] = React.useState('ALL');
-    const [viewMode, setViewMode] = React.useState<'grid' | 'table'>('table');
+    const [viewMode, setViewMode] = React.useState<'grid' | 'table' | 'calendar'>('table');
     const [editing, setEditing] = React.useState<Product | null>(null);
     const [creating, setCreating] = React.useState(false);
     const [toDelete, setToDelete] = React.useState<any>(null);
+    const [showCategoryMgr, setShowCategoryMgr] = React.useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     React.useEffect(() => { fetchData(); }, []);
@@ -165,6 +172,9 @@ export default function ProductsPage() {
                 icon={<ShoppingBag size={20} strokeWidth={1.75} />}
                 actions={
                     <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowCategoryMgr(true)}>
+                            <Tag className="size-3.5" /> Categorias
+                        </Button>
                         <Button size="sm" variant="outline" onClick={handleExport}>
                             <Download className="size-3.5" /> Exportar
                         </Button>
@@ -206,6 +216,7 @@ export default function ProductsPage() {
                         <ViewToggler viewMode={viewMode} setViewMode={setViewMode} />
                     </div>
                 </div>
+
 
                 <div className="flex-1 overflow-y-auto p-6">
                     {filtered.length === 0 ? (
@@ -367,7 +378,7 @@ export default function ProductsPage() {
 
             {/* Edit / Create Dialog */}
             <Dialog open={!!target} onOpenChange={(o) => { if (!o) { setEditing(null); setCreating(false); } }}>
-                <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-[720px] max-h-[92vh] overflow-y-auto">
                     {target && (
                         <ProductForm
                             initial={target}
@@ -396,6 +407,17 @@ export default function ProductsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <CategoryManager
+                open={showCategoryMgr}
+                onOpenChange={setShowCategoryMgr}
+                categories={categories}
+                onChange={fetchData}
+                productsCountByCategory={products.reduce((acc: Record<string, number>, p) => {
+                    (p.categoryIds || []).forEach((cid: string) => { acc[cid] = (acc[cid] || 0) + 1; });
+                    return acc;
+                }, {})}
+            />
 
             <Toaster />
         </div>
@@ -445,60 +467,72 @@ function ProductForm({ initial, categories, isNew, onSave, onCancel }: ProductFo
                 <DialogDescription>Datos del producto y disponibilidad en el menú.</DialogDescription>
             </DialogHeader>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-2">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-5 py-2">
                 <div className="space-y-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="p-name">Nombre <span className="text-destructive">*</span></Label>
-                        <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Hamburguesa doble" />
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg border bg-card p-4 space-y-4">
+                        <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                            <Package className="size-3" /> Informacion basica
+                        </h4>
                         <div className="space-y-1.5">
-                            <Label htmlFor="p-currency">Moneda</Label>
-                            <Input id="p-currency" value={currency} onChange={(e) => setCurrency(e.target.value)} className="text-center" />
+                            <Label htmlFor="p-name">Nombre del producto <span className="text-destructive">*</span></Label>
+                            <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Hamburguesa doble con queso" />
                         </div>
-                        <div className="col-span-2 space-y-1.5">
-                            <Label htmlFor="p-price">Precio</Label>
-                            <Input id="p-price" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+                        <div className="space-y-1.5">
+                            <Label htmlFor="p-desc">Descripcion</Label>
+                            <Textarea id="p-desc" value={description} onChange={(e) => setDescription(e.target.value)} className="h-20 resize-none" placeholder="Ingredientes, detalles, notas alergenicas..." />
+                            <p className="text-[10px] text-muted-foreground">Aparece bajo el nombre en el menu del hotel.</p>
                         </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <Label>Categoría</Label>
-                        <Select value={categoryId || 'NONE'} onValueChange={(v) => setCategoryId((v === 'NONE' || !v) ? '' : v)}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Sin categoria" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="NONE">Sin categoria</SelectItem>
-                                {categories.map((c) => (
-                                    <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <Label htmlFor="p-desc">Descripcion</Label>
-                        <Textarea id="p-desc" value={description} onChange={(e) => setDescription(e.target.value)} className="h-24 resize-none" placeholder="Ingredientes, detalles..." />
+                    <div className="rounded-lg border bg-card p-4 space-y-4">
+                        <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                            <Tag className="size-3" /> Precio y categoria
+                        </h4>
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="p-currency" className="text-[11px]">Moneda</Label>
+                                <Input id="p-currency" value={currency} onChange={(e) => setCurrency(e.target.value)} className="text-center h-9" maxLength={3} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="p-price" className="text-[11px]">Precio</Label>
+                                <Input id="p-price" type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="h-9 font-mono tabular-nums" />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-[11px]">Categoria</Label>
+                            <Select value={categoryId || 'NONE'} onValueChange={(v) => setCategoryId((!v || v === 'NONE') ? '' : v)}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Sin categoria" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="NONE"><span className="text-muted-foreground">Sin categoria</span></SelectItem>
+                                    {categories.map((c) => (
+                                        <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </div>
 
                 <div className="space-y-4">
-                    <div className="space-y-1.5">
-                        <Label>Imagen</Label>
+                    <div className="rounded-lg border bg-card p-4 space-y-3">
+                        <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Foto</h4>
                         <div className="aspect-square rounded-md border bg-muted overflow-hidden grid place-items-center relative">
                             {photo
                                 ? <img src={photo} className="w-full h-full object-cover" />
-                                : <div className="text-muted-foreground"><Package className="size-10 opacity-30" /></div>}
+                                : <div className="flex flex-col items-center text-muted-foreground/50"><Package className="size-10 mb-1" /><span className="text-[10px] uppercase tracking-wide">Sin imagen</span></div>}
                         </div>
-                        <ImageUpload compact label="Subir imagen" onUploadSuccess={(url) => setPhoto(url)} />
+                        <ImageUpload compact label={photo ? 'Cambiar' : 'Subir imagen'} onUploadSuccess={(url) => setPhoto(url)} />
+                        {photo && (
+                            <Button size="sm" variant="ghost" className="w-full h-7 text-[11px] text-muted-foreground" onClick={() => setPhoto('')}>Quitar imagen</Button>
+                        )}
                     </div>
 
-                    <div className="flex items-center justify-between rounded-md border bg-card px-3 py-2.5">
-                        <div>
+                    <div className="rounded-lg border bg-card p-4 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
                             <Label htmlFor="p-avail" className="text-[12px] font-medium cursor-pointer">Disponible</Label>
-                            <p className="text-[11px] text-muted-foreground">Mostrar en menú público</p>
+                            <p className="text-[10px] text-muted-foreground">{available ? 'Se muestra en el menu' : 'Oculto para clientes'}</p>
                         </div>
                         <Switch id="p-avail" checked={available} onCheckedChange={setAvailable} />
                     </div>

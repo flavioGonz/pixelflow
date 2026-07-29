@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const WidgetSchema = new mongoose.Schema({
     id: String,
-    type: { type: String, enum: ['VIDEO', 'PRICE_LIST', 'SLIDER', 'TEXT', 'WEATHER', 'ACTIVITIES', 'PRODUCT_LIST', 'QR_CODE', 'CATEGORY_NAV', 'NAV_BUTTON', 'TICKER', 'SOCIAL_FEED', 'COUNTDOWN', 'ATMOSPHERE', 'FLIGHT_BOARD', 'MUSIC_PLAYER', 'DATE_TIME'] },
+    type: { type: String, enum: ['VIDEO', 'PRICE_LIST', 'SLIDER', 'TEXT', 'WEATHER', 'ACTIVITIES', 'PRODUCT_LIST', 'QR_CODE', 'CATEGORY_NAV', 'NAV_BUTTON', 'TICKER', 'SOCIAL_FEED', 'COUNTDOWN', 'ATMOSPHERE', 'FLIGHT_BOARD', 'MUSIC_PLAYER', 'DATE_TIME', 'DATA_TABLE', 'SENSOR_VALUE', 'IMAGE', 'WIFI_INFO', 'FEEDBACK'] },
     x: Number,
     y: Number,
     w: Number,
@@ -24,6 +24,12 @@ const LayoutSchema = new mongoose.Schema({
     backgroundOverlayOpacity: { type: Number, default: 0.5 },
     backgroundPattern: { type: String, default: 'none' },
     backgroundPatternOpacity: { type: Number, default: 0.2 },
+    // Design resolution — optional metadata for Studio. Runtime uses % positions.
+    designWidth: { type: Number },
+    designHeight: { type: Number },
+    targetDPI: { type: Number, default: 96 },
+    // Screensaver mode
+    isScreensaver: { type: Boolean, default: false },
     modifiedBy: { type: String, default: 'Admin' },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
