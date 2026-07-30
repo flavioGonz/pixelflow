@@ -682,7 +682,16 @@ nextApp.prepare().then(() => {
         handle(req, res, parsedUrl);
     });
 
-    const io = new Server(server);
+    const io = new Server(server, {
+        // Fase A: conexión sólida
+        pingInterval: 10000,       // server pinga al cliente cada 10s
+        pingTimeout: 20000,        // si no responde en 20s → disconnect
+        connectionStateRecovery: {
+            maxDisconnectionDuration: 2 * 60 * 1000,  // recupera sesión si vuelve en <2min
+            skipMiddlewares: true,
+        },
+        transports: ['websocket', 'polling'],
+    });
 
 
     // Map socket.id -> screenId for presence tracking
@@ -983,7 +992,34 @@ nextApp.prepare().then(() => {
         });
 
         // Heartbeat: player pings every 10s while alive. Updates lastSeen.
-        socket.on('heartbeat', async () => {
+        // Fase C: Comandos remotos desde admin → player
+        socket.on('remote_command', async (data) => {
+            try {
+                const { screenId, action, payload } = data || {};
+                if (!screenId || !action) return;
+                // Emitir al room de la pantalla
+                io.to(`screen_${screenId}`).emit('remote_command', {
+                    action,
+                    payload: payload || {},
+                    requestedAt: Date.now(),
+                });
+            } catch (e) {
+                console.error('remote_command error:', e);
+            }
+        });
+
+        // Player responde a health_check / etc → broadcast a admins
+        socket.on('remote_command_reply', (data) => {
+            try {
+                const screenId = socketScreenMap.get(socket.id);
+                if (!screenId) return;
+                io.emit('remote_command_reply', { screenId, ...data });
+            } catch (e) {
+                console.error('remote_command_reply error:', e);
+            }
+        });
+
+                socket.on('heartbeat', async () => {
             try {
                 const screenId = socketScreenMap.get(socket.id);
                 if (!screenId) return;

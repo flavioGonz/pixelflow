@@ -22,6 +22,10 @@ import Circle from 'lucide-react/dist/esm/icons/circle';
 import Search from 'lucide-react/dist/esm/icons/search';
 import LayoutGrid from 'lucide-react/dist/esm/icons/layout-grid';
 import List from 'lucide-react/dist/esm/icons/list';
+import Zap from 'lucide-react/dist/esm/icons/zap';
+import RotateCw from 'lucide-react/dist/esm/icons/rotate-cw';
+import MoreVertical from 'lucide-react/dist/esm/icons/more-vertical';
+import Cpu from 'lucide-react/dist/esm/icons/cpu';
 
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { Button } from '@/components/ui/button';
@@ -44,6 +48,15 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -104,7 +117,7 @@ const BROWSER_ICON: Record<string, string> = {
     Unknown: '❓',
 };
 
-const ONLINE_THRESHOLD_MS = 15000;
+const ONLINE_THRESHOLD_MS = 45000; // Fase A: permite 3-4 heartbeats fallidos antes de marcar offline
 type StatusFilter = 'all' | 'online' | 'offline' | 'pending';
 
 export default function ScreensPage() {
@@ -141,6 +154,11 @@ export default function ScreensPage() {
         socket.on('disconnect', () => setConnected(false));
         socket.on('screens_list', (data: ScreenRow[]) => setScreens(data));
         socket.on('layouts_list', (data: Layout[]) => setLayouts(data));
+        socket.on('remote_command_reply', (data: any) => {
+            if (data?.action === 'health_check') {
+                setHealthResult((prev: any) => (prev && prev.screenId === data.screenId ? { ...prev, loading: false, result: data.result } : prev));
+            }
+        });
         return () => { socket.disconnect(); };
     }, [fetchData]);
 
@@ -162,6 +180,25 @@ export default function ScreensPage() {
     const handleAssignLayout = (screenId: string, layoutId: string) => {
         socket.emit('assign_layout_to_screen', { screenId, layoutId });
     };
+    // Fase C: Comandos remotos
+    const [healthResult, setHealthResult] = useState<any>(null);
+    const [forceLayoutFor, setForceLayoutFor] = useState<{ screenId: string; name: string } | null>(null);
+    const sendRemote = useCallback((screenId: string, action: string, payload?: any) => {
+        socket.emit('remote_command', { screenId, action, payload });
+    }, []);
+    const cmdSoftRefresh = (s: ScreenRow) => { sendRemote(s.screenId, 'soft_refresh'); toast.success('Refresh enviado', { description: s.name || s.screenId }); };
+    const cmdHardReload  = (s: ScreenRow) => { sendRemote(s.screenId, 'hard_reload'); toast.success('Reload enviado', { description: s.name || s.screenId }); };
+    const cmdHealth      = (s: ScreenRow) => {
+        setHealthResult({ screenId: s.screenId, name: s.name || s.screenId, loading: true });
+        sendRemote(s.screenId, 'health_check');
+    };
+    const cmdForceLayout = (s: ScreenRow, layoutId: string) => {
+        sendRemote(s.screenId, 'force_layout', { layoutId });
+        const ln = layouts.find(l => l._id === layoutId)?.name || layoutId;
+        toast.success('Interface forzada', { description: `${s.name || s.screenId} → ${ln}` });
+        setForceLayoutFor(null);
+    };
+
     const copyPlayerUrl = async (screenId: string) => {
         const url = window.location.origin + '/player/' + screenId;
         const ok = await copyToClipboard(url);
@@ -409,6 +446,30 @@ export default function ScreensPage() {
                                                                 <Shield className="size-3.5" /> Autorizar
                                                             </Button>
                                                         )}
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger
+                                                                render={<Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" title="Comandos remotos" />}
+                                                            >
+                                                                <Zap className="size-4" />
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-56">
+                                                                <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Comandos remotos</DropdownMenuLabel>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem onClick={() => cmdSoftRefresh(s)} disabled={!isOnline}>
+                                                                    <RefreshCw className="size-3.5 mr-2" /> Refresh suave
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={() => cmdHardReload(s)} disabled={!isOnline}>
+                                                                    <RotateCw className="size-3.5 mr-2" /> Reload completo
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={() => setForceLayoutFor({ screenId: s.screenId, name: s.name || s.screenId })} disabled={!isOnline}>
+                                                                    <LayoutIcon className="size-3.5 mr-2" /> Forzar interface…
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem onClick={() => cmdHealth(s)} disabled={!isOnline}>
+                                                                    <Activity className="size-3.5 mr-2" /> Health check
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
                                                         <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => setToDelete(s)} title="Eliminar pantalla">
                                                             <Trash2 className="size-4" />
                                                         </Button>
@@ -519,6 +580,75 @@ export default function ScreensPage() {
             </AlertDialog>
 
             <Toaster />
+
+            {/* Fase C: Health check */}
+            <Dialog open={!!healthResult} onOpenChange={(o) => { if (!o) setHealthResult(null); }}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Cpu className="size-5 text-primary" /> Health check — {healthResult?.name || ''}
+                        </DialogTitle>
+                    </DialogHeader>
+                    {healthResult?.loading ? (
+                        <div className="py-8 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+                            <RefreshCw className="size-5 animate-spin" />
+                            Esperando respuesta del player…
+                            <span className="text-[10px]">Si no responde en 5s, es probable que esté colgado o sin red.</span>
+                        </div>
+                    ) : healthResult?.result ? (
+                        <div className="space-y-2 text-[12px]">
+                            <div className="grid grid-cols-2 gap-2">
+                                <Stat label="Build ID"    value={healthResult.result.version} mono />
+                                <Stat label="Uptime"      value={fmtMs(healthResult.result.uptimeMs)} />
+                                <Stat label="Viewport"    value={`${healthResult.result.viewport?.w}×${healthResult.result.viewport?.h}`} mono />
+                                <Stat label="Orientación" value={healthResult.result.viewport?.orientation} />
+                                <Stat label="Layout"      value={healthResult.result.layoutName || '—'} />
+                                <Stat label="Online SO"   value={healthResult.result.online ? '✅ sí' : '❌ no'} />
+                                {healthResult.result.memory && (<>
+                                    <Stat label="RAM JS"     value={`${healthResult.result.memory.usedMB}MB`} />
+                                    <Stat label="RAM límite" value={`${healthResult.result.memory.limitMB}MB`} />
+                                </>)}
+                            </div>
+                            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-3 mb-1">Últimos errores JS ({healthResult.result.errors?.length || 0})</div>
+                            {(!healthResult.result.errors || healthResult.result.errors.length === 0) ? (
+                                <div className="text-[11px] text-emerald-500">✓ Sin errores</div>
+                            ) : (
+                                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                                    {healthResult.result.errors.map((e: any, i: number) => (
+                                        <li key={i} className="text-[10px] font-mono bg-destructive/5 border border-destructive/20 rounded px-2 py-1">
+                                            <span className="text-destructive">{e.msg}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
+
+            {/* Fase C: Force Layout */}
+            <Dialog open={!!forceLayoutFor} onOpenChange={(o) => { if (!o) setForceLayoutFor(null); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Forzar interface en {forceLayoutFor?.name || ''}</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid grid-cols-1 gap-1.5 max-h-80 overflow-y-auto">
+                        {layouts.map((l) => (
+                            <button
+                                key={l._id}
+                                onClick={() => forceLayoutFor && cmdForceLayout({ screenId: forceLayoutFor.screenId } as any, l._id)}
+                                className="text-left px-3 py-2 rounded border hover:bg-accent hover:border-primary/50 transition-colors flex items-center gap-2 text-[13px]"
+                            >
+                                <LayoutIcon className="size-4 text-muted-foreground" />
+                                <span className="flex-1 truncate">{l.name}</span>
+                            </button>
+                        ))}
+                        {layouts.length === 0 && (
+                            <div className="text-center text-[12px] text-muted-foreground py-4">No hay interfaces guardadas.</div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     </TooltipProvider>);
 }
@@ -573,3 +703,21 @@ const EmptyState: React.FC<{ total: number; title: string; description: string }
         </div>
     </div>
 );
+
+
+const Stat: React.FC<{ label: string; value: React.ReactNode; mono?: boolean }> = ({ label, value, mono }) => (
+    <div className="rounded border bg-muted/30 px-2 py-1.5">
+        <div className="text-[9px] uppercase tracking-widest text-muted-foreground">{label}</div>
+        <div className={"text-[12px] font-semibold " + (mono ? 'font-mono truncate' : '')}>{value}</div>
+    </div>
+);
+
+const fmtMs = (ms: number) => {
+    if (!ms || ms < 0) return '—';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return s + 's';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ' + (s % 60) + 's';
+    const h = Math.floor(m / 60);
+    return h + 'h ' + (m % 60) + 'm';
+};

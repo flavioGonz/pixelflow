@@ -260,7 +260,41 @@ export default function PlayerPage() {
     useEffect(() => {
         if (!id) return;
 
-        socket = io();
+        socket = io({
+            // Fase A: reconexión infinita mientras haya red
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            reconnectionAttempts: Infinity,
+            randomizationFactor: 0.3,
+            timeout: 20000,
+            transports: ['websocket', 'polling'],
+        });
+
+        // Wake Lock — mantener pantalla siempre encendida en el kiosko
+        let wakeLock: any = null;
+        const requestWakeLock = async () => {
+            try {
+                if ('wakeLock' in navigator) {
+                    // @ts-ignore
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                }
+            } catch (e) { /* silent — no soportado o denegado */ }
+        };
+        requestWakeLock();
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                requestWakeLock();
+                // Al volver a foco, forzar reconnect si el socket se cortó
+                if (socket && !socket.connected) socket.connect();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+
+        // Auto-reconnect cuando el SO detecta que volvió la red
+        const onOnline = () => { if (socket && !socket.connected) socket.connect(); };
+        window.addEventListener('online', onOnline);
 
         socket.on('connect', () => {
             console.log('Socket Connected');
@@ -342,7 +376,61 @@ export default function PlayerPage() {
             _screensaverLayoutDurationsRef.current = (cfg.layoutDurationsMs && typeof cfg.layoutDurationsMs === 'object') ? cfg.layoutDurationsMs : {};
         });
 
-        socket.on('refresh_layout', () => {
+        // Fase C: comandos remotos desde /admin/screens
+        // Rastrear errores JS recientes para health_check
+        if (typeof window !== 'undefined' && !(window as any).__pfErrs) {
+            (window as any).__pfErrs = [];
+            const trackErr = (e: any) => {
+                const arr = (window as any).__pfErrs as any[];
+                arr.push({ msg: String(e?.message || e?.reason || e), at: Date.now() });
+                if (arr.length > 10) arr.shift();
+            };
+            window.addEventListener('error', trackErr);
+            window.addEventListener('unhandledrejection', trackErr);
+        }
+        const _bootAt = Date.now();
+        socket.on('remote_command', (cmd: any) => {
+            const action = cmd?.action;
+            const payload = cmd?.payload || {};
+            try {
+                if (action === 'soft_refresh') {
+                    // Re-fetch del layout actual
+                    if (socket && socket.connected && id) {
+                        const lid = (layout && (layout.id || layout._id)) || _defaultLayoutIdRef.current;
+                        if (lid) socket.emit('request_layout', { screenId: id, layoutId: lid });
+                    }
+                } else if (action === 'hard_reload') {
+                    setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 100);
+                } else if (action === 'force_layout' && payload.layoutId) {
+                    if (socket && socket.connected && id) {
+                        socket.emit('request_layout', { screenId: id, layoutId: payload.layoutId });
+                    }
+                } else if (action === 'health_check') {
+                    const mem: any = (performance as any).memory || {};
+                    const errs = (typeof window !== 'undefined' ? (window as any).__pfErrs : []) || [];
+                    socket.emit('remote_command_reply', {
+                        action: 'health_check',
+                        result: {
+                            version: (typeof window !== 'undefined' && (window as any).__NEXT_DATA__?.buildId) || 'unknown',
+                            uptimeMs: Date.now() - _bootAt,
+                            viewport: { w: window.innerWidth, h: window.innerHeight, orientation: window.innerHeight > window.innerWidth ? 'portrait' : 'landscape' },
+                            memory: mem.usedJSHeapSize ? {
+                                usedMB: Math.round(mem.usedJSHeapSize / 1024 / 1024),
+                                limitMB: Math.round(mem.jsHeapSizeLimit / 1024 / 1024),
+                            } : null,
+                            layoutId: layout?._id || null,
+                            layoutName: layout?.name || null,
+                            userAgent: navigator.userAgent,
+                            online: navigator.onLine,
+                            errors: errs.slice(-5),
+                            at: Date.now(),
+                        }
+                    });
+                }
+            } catch (e) { console.error('remote_command handler err:', e); }
+        });
+
+                socket.on('refresh_layout', () => {
             window.location.reload();
         });
 
@@ -368,6 +456,9 @@ export default function PlayerPage() {
         return () => {
             if (typeof window !== 'undefined') window.removeEventListener('pf-nav', onNav);
             clearInterval(heartbeatId);
+            document.removeEventListener('visibilitychange', onVisibility);
+            window.removeEventListener('online', onOnline);
+            if (wakeLock) { try { wakeLock.release(); } catch {} }
             if (socket) {
                 socket.disconnect();
             }
@@ -456,15 +547,15 @@ export default function PlayerPage() {
 
             <div className="fixed inset-0 pointer-events-none z-[100] opacity-[0.03] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
 
-            <AnimatePresence>
+            <AnimatePresence mode="wait" initial={false}>
                 {layout ? (
                     <motion.div
                         key={layout.id || layout._id}
                         initial={{ x: navDirection === 'pop' ? '-30%' : '100%', opacity: navDirection === 'pop' ? 0.6 : 1 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        exit={{ x: navDirection === 'pop' ? '100%' : '-30%', opacity: navDirection === 'pop' ? 1 : 0.6 }}
+                        animate={{ x: 0, opacity: 1, pointerEvents: 'auto' as any }}
+                        exit={{ x: navDirection === 'pop' ? '100%' : '-30%', opacity: navDirection === 'pop' ? 1 : 0.6, pointerEvents: 'none' as any, transition: { duration: 0.18, ease: [0.32, 0.72, 0, 1] } }}
                         transition={{
-                            duration: 0.24,
+                            duration: 0.22,
                             ease: [0.32, 0.72, 0, 1]
                         }}
                         className="absolute inset-0 w-full h-full"
