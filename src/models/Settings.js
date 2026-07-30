@@ -21,6 +21,6 @@ const SettingsSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now },
 });
 
-SettingsSchema.pre('save', function (next) { this.updatedAt = Date.now(); next(); });
+SettingsSchema.pre('save', async function () { this.updatedAt = Date.now(); });
 
 module.exports = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
