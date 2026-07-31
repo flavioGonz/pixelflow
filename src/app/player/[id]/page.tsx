@@ -8,6 +8,7 @@ import { useScreenOrientation } from '@/hooks/useScreenOrientation';
 import { useWindowSize } from '@/hooks/useWindowSize';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
+import { registerServiceWorker, prefetchAllLayouts } from '@/lib/offlineSync';
 import WidgetRenderer from '@/components/shared/WidgetRenderer';
 
 // Layout-level transitions when changing interface. Chosen via layout.transition or master's transition.
@@ -260,6 +261,19 @@ export default function PlayerPage() {
     useEffect(() => {
         if (!id) return;
 
+        // Fase B: registrar Service Worker + prefetch de todos los layouts
+        if (typeof window !== 'undefined') {
+            registerServiceWorker().then((reg) => {
+                if (reg) {
+                    // Prefetch en background, sin bloquear al player
+                    setTimeout(() => { prefetchAllLayouts().catch(() => {}); }, 3000);
+                    // Re-prefetch cada 10 min para capturar layouts nuevos
+                    const pfId = setInterval(() => { prefetchAllLayouts().catch(() => {}); }, 10 * 60 * 1000);
+                    (window as any).__pfPrefetchId = pfId;
+                }
+            });
+        }
+
         socket = io({
             // Fase A: reconexión infinita mientras haya red
             reconnection: true,
@@ -456,6 +470,7 @@ export default function PlayerPage() {
         return () => {
             if (typeof window !== 'undefined') window.removeEventListener('pf-nav', onNav);
             clearInterval(heartbeatId);
+            if ((window as any).__pfPrefetchId) clearInterval((window as any).__pfPrefetchId);
             document.removeEventListener('visibilitychange', onVisibility);
             window.removeEventListener('online', onOnline);
             if (wakeLock) { try { wakeLock.release(); } catch {} }
@@ -544,6 +559,9 @@ export default function PlayerPage() {
                     Buscando Servidor...
                 </div>
             )}
+
+            {/* Fase B: chip offline discreto */}
+            <OfflineChip connected={isConnected} />
 
             <div className="fixed inset-0 pointer-events-none z-[100] opacity-[0.03] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
 
@@ -843,3 +861,25 @@ function PersistentLayer({ layout }: { layout: any }) {
         </>
     );
 }
+
+
+const OfflineChip: React.FC<{ connected: boolean }> = ({ connected }) => {
+    const [online, setOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+    useEffect(() => {
+        const on  = () => setOnline(true);
+        const off = () => setOnline(false);
+        window.addEventListener('online', on);
+        window.addEventListener('offline', off);
+        return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+    }, []);
+    const isOffline = !online || !connected;
+    if (!isOffline) return null;
+    return (
+        <div className="fixed top-3 right-3 z-[110] pointer-events-none">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white text-[10px] font-bold uppercase tracking-widest opacity-80 shadow-lg">
+                <span className="size-1.5 rounded-full bg-amber-400 animate-pulse" />
+                {online ? 'Reconectando…' : 'Sin red · modo offline'}
+            </div>
+        </div>
+    );
+};
