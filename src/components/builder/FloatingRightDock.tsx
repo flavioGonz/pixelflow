@@ -38,6 +38,7 @@ interface FloatingRightDockProps {
     layoutName: string;
     screens: Screen[];
     screenId: string;
+    editingLayoutId?: string | null;
     onScreenChange: (id: string) => void;
     onPreview: () => void;
     onPublish: () => void;
@@ -80,6 +81,7 @@ export const FloatingRightDock: React.FC<FloatingRightDockProps> = ({
     layoutName,
     screens,
     screenId,
+    editingLayoutId,
     onScreenChange,
     onPreview,
     onPublish,
@@ -114,6 +116,7 @@ export const FloatingRightDock: React.FC<FloatingRightDockProps> = ({
         onResolutionChange({ width: w, height: h });
     };
 
+    const [qrMode, setQrMode] = React.useState<'player' | 'preview'>('player');
     const selectedScreen = screens.find((s) => s.screenId === screenId);
     const isOnline = !!(selectedScreen?.lastSeen && (Date.now() - new Date(selectedScreen.lastSeen).getTime() < 15000));
 
@@ -399,8 +402,14 @@ export const FloatingRightDock: React.FC<FloatingRightDockProps> = ({
         
             {/* PF-QR-MODAL fullscreen overlay */}
             {qrOpen && (() => {
+                const canPreview = !!editingLayoutId;
+                const effectiveMode = canPreview ? qrMode : 'player';
                 const targetId = screenId || '';
-                const url = typeof window !== 'undefined' ? `${window.location.origin}/player/${targetId}` : '';
+                const url = typeof window === 'undefined' ? '' : (
+                    effectiveMode === 'preview' && editingLayoutId
+                        ? `${window.location.origin}/preview/${editingLayoutId}`
+                        : `${window.location.origin}/player/${targetId}`
+                );
                 const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=520x520&margin=3&data=${encodeURIComponent(url)}`;
                 return (
                     <div
@@ -409,11 +418,27 @@ export const FloatingRightDock: React.FC<FloatingRightDockProps> = ({
                     >
                         <div
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-card border rounded-2xl shadow-2xl p-6 max-w-sm w-[min(92vw,420px)]"
+                            className="bg-card border rounded-2xl shadow-2xl p-6 max-w-sm w-[min(92vw,460px)]"
                         >
                             <div className="text-center space-y-3">
                                 <h3 className="text-lg font-bold">Escaneá con tu celu</h3>
-                                <p className="text-[12px] text-muted-foreground">Vas a ver el player exactamente como se muestra en el tótem, con touch real.</p>
+                                {canPreview && (
+                                    <div className="flex gap-1 justify-center bg-muted rounded-md p-0.5 mx-auto w-fit">
+                                        <button
+                                            onClick={() => setQrMode('preview')}
+                                            className={'px-3 h-8 rounded text-[10px] font-bold uppercase tracking-widest transition-colors ' + (effectiveMode === 'preview' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+                                        >🎨 Esta interface</button>
+                                        <button
+                                            onClick={() => setQrMode('player')}
+                                            className={'px-3 h-8 rounded text-[10px] font-bold uppercase tracking-widest transition-colors ' + (effectiveMode === 'player' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+                                        >📺 Player pantalla</button>
+                                    </div>
+                                )}
+                                <p className="text-[12px] text-muted-foreground">
+                                    {effectiveMode === 'preview'
+                                        ? 'Vista previa aislada de la interface que estás editando.'
+                                        : `Vas a ver el player real de "${selectedScreen?.name || screenId || 'pantalla'}" como se muestra en el tótem, con touch.`}
+                                </p>
                                 <div className="rounded-xl bg-white p-3 inline-block">
                                     <img src={qrSrc} alt="QR" className="block w-64 h-64" />
                                 </div>

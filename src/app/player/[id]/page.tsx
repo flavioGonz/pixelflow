@@ -572,26 +572,16 @@ export default function PlayerPage() {
 
             <div className="fixed inset-0 pointer-events-none z-[100] opacity-[0.03] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
 
-            <AnimatePresence mode="wait" initial={false}>
-                {layout ? (
-                    <motion.div
-                        key={layout.id || layout._id}
-                        initial={{ x: navDirection === 'pop' ? '-30%' : '100%', opacity: navDirection === 'pop' ? 0.6 : 1 }}
-                        animate={{ x: 0, opacity: 1, pointerEvents: 'auto' as any }}
-                        exit={{ x: navDirection === 'pop' ? '100%' : '-30%', opacity: navDirection === 'pop' ? 1 : 0.6, pointerEvents: 'none' as any, transition: { duration: 0.18, ease: [0.32, 0.72, 0, 1] } }}
-                        transition={{
-                            duration: 0.22,
-                            ease: [0.32, 0.72, 0, 1]
-                        }}
-                        className="absolute inset-0 w-full h-full"
-                        style={{
-                            backgroundColor: layout.backgroundColor || 'transparent',
-                        }}
-                    >
-                        {/* iOS-style transition: no cinematic flash */}
+            {/* Fase perf: Background PERSISTENTE fuera del AnimatePresence.
+                Cada sub-layer tiene key propio → React NO remonta si la URL/color/pattern es igual entre layouts.
+                Los widgets sí siguen dentro del AnimatePresence para la transición iOS. */}
+            {layout && (
+                <>
+                    {/* Color de fondo */}
+                    <div className="absolute inset-0 z-0" style={{ backgroundColor: layout.backgroundColor || '#000' }} />
 
-                        {/* 1. Background Media Layer — key por URL para no remontar si es la misma */}
-                        <div key={"bg-" + (layout.backgroundVideo || layout.backgroundImage || 'none')} className="absolute inset-0 z-0 overflow-hidden">
+                    {/* 1. Background Media Layer */}
+                    <div key={"bg-media-" + (layout.backgroundVideo || layout.backgroundImage || 'none')} className="absolute inset-0 z-0 overflow-hidden">
                             {youtubeId ? (
                                 <div className="relative w-[300%] h-[300%] -top-[100%] -left-[100%] pointer-events-none">
                                     <iframe
@@ -663,6 +653,23 @@ export default function PlayerPage() {
                             />
                         ) : null}
 
+                </>
+            )}
+
+            {/* AnimatePresence sólo para los WIDGETS del layout (transición iOS) */}
+            <AnimatePresence mode="wait" initial={false}>
+                {layout ? (
+                    <motion.div
+                        key={layout.id || layout._id}
+                        initial={{ x: navDirection === 'pop' ? '-20%' : '100%', opacity: navDirection === 'pop' ? 0.8 : 1 }}
+                        animate={{ x: 0, opacity: 1, pointerEvents: 'auto' as any }}
+                        exit={{ x: navDirection === 'pop' ? '100%' : '-20%', opacity: navDirection === 'pop' ? 1 : 0.8, pointerEvents: 'none' as any, transition: { duration: 0.15, ease: [0.32, 0.72, 0, 1] } }}
+                        transition={{
+                            duration: 0.18,
+                            ease: [0.32, 0.72, 0, 1]
+                        }}
+                        className="absolute inset-0 w-full h-full z-10"
+                    >
                         {/* 5. Widgets Layer - Scaled to fit while maintaining aspect ratio */}
                         <div className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden pointer-events-none">
                             <motion.div

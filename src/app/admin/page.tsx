@@ -580,6 +580,7 @@ function AdminDashboard() {
 
                 {/* All controls — right vertical dock */}
                 <FloatingRightDock
+                    editingLayoutId={editingLayoutId}
                     orientation={orientation}
                     onOrientationChange={(o) => {
                         setOrientation(o);
