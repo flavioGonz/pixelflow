@@ -50,7 +50,7 @@ const sections: Section[] = [
             { icon: Calendar, label: 'Rutinas', href: '/admin/schedules', id: 'schedules' },
             { icon: Network, label: 'Mapa', href: '/admin/flow', id: 'flow' },
             { icon: Moon, label: 'Screensaver', href: '/admin/screensaver', id: 'screensaver' },
-            { icon: MenuIcon, label: 'Barra', href: '/admin/bottomnav', id: 'bottomnav' },
+            { icon: MenuIcon, label: 'Menú principal', href: '/admin/bottomnav', id: 'bottomnav' },
         ],
     },
     {

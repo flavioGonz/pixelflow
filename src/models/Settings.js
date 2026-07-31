@@ -12,6 +12,7 @@ const BottomNavItemSchema = new mongoose.Schema({
     action: { type: String, enum: ['GO_TO', 'BACK', 'HOME'], default: 'GO_TO' },
     layoutId: { type: String, default: '' },
     color: { type: String, default: '' },
+    children: { type: mongoose.Schema.Types.Mixed, default: [] },
 }, { _id: false });
 
 const BottomNavSchema = new mongoose.Schema({

@@ -10,11 +10,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Toaster, toast } from 'sonner';
 import * as Icons from 'lucide-react';
 import Plus from 'lucide-react/dist/esm/icons/plus';
+import Upload from 'lucide-react/dist/esm/icons/upload';
 import Trash2 from 'lucide-react/dist/esm/icons/trash-2';
 import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up';
 import ArrowDown from 'lucide-react/dist/esm/icons/arrow-down';
 import Menu from 'lucide-react/dist/esm/icons/menu';
 import { BottomNav, BottomNavConfig, BottomNavItem } from '@/components/player/BottomNav';
+
+const uploadIcon = async (file: File): Promise<string | null> => {
+    const fd = new FormData(); fd.append('image', file);
+    try {
+        const r = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (!r.ok) return null;
+        const d = await r.json();
+        return d.url || null;
+    } catch { return null; }
+};
 
 const strval = (v: any, def = ''): string => (typeof v === 'string' && v ? v : def);
 
@@ -85,8 +96,8 @@ export default function BottomNavPage() {
     return (
         <div className="flex-1 flex flex-col min-h-0 bg-background text-foreground">
             <AdminHeader
-                title="Barra de navegación"
-                subtitle="Configurá una barra flotante global que aparece en todas las interfaces del player."
+                title="Menú principal"
+                subtitle="Configurá el menú flotante que aparece en todas las interfaces del player."
                 icon={<Menu className="size-5" />}
                 actions={
                     <Button onClick={save} disabled={!dirty || saving}>
@@ -153,44 +164,19 @@ export default function BottomNavPage() {
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    {config.items!.map((item, idx) => {
-                                        const IconComp: any = (Icons as any)[item.icon || 'Circle'] || Icons.Circle;
-                                        return (
-                                            <div key={idx} className="grid grid-cols-[auto_100px_1fr_140px_140px_auto] gap-2 items-center p-2 rounded border bg-muted/30">
-                                                <div className="size-10 rounded grid place-items-center bg-background border" style={{ color: item.color || undefined }}>
-                                                    <IconComp className="size-5" />
-                                                </div>
-                                                <Select value={strval(item.icon, 'Home')} onValueChange={(v: string | null) => updateItem(idx, { icon: v || 'Home' })}>
-                                                    <SelectTrigger className="h-9 text-[11px]"><SelectValue /></SelectTrigger>
-                                                    <SelectContent className="max-h-60 overflow-y-auto">
-                                                        {ICON_CHOICES.map(ic => <SelectItem key={ic} value={ic}>{ic}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                                <Input value={strval(item.label)} onChange={(e) => updateItem(idx, { label: e.target.value })} placeholder="Etiqueta" className="h-9 text-[12px]" />
-                                                <Select value={strval(item.action, 'GO_TO')} onValueChange={(v: string | null) => updateItem(idx, { action: (v || 'GO_TO') as any })}>
-                                                    <SelectTrigger className="h-9 text-[11px]"><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="GO_TO">Ir a interface</SelectItem>
-                                                        <SelectItem value="BACK">← Atrás</SelectItem>
-                                                        <SelectItem value="HOME">⌂ Inicio</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                                {item.action === 'GO_TO' ? (
-                                                    <Select value={strval(item.layoutId)} onValueChange={(v: string | null) => updateItem(idx, { layoutId: v || '' })}>
-                                                        <SelectTrigger className="h-9 text-[11px]"><SelectValue placeholder="— Elegí interface —" /></SelectTrigger>
-                                                        <SelectContent className="max-h-60">{layouts.map(l => <SelectItem key={l._id} value={l._id}>{l.name}</SelectItem>)}</SelectContent>
-                                                    </Select>
-                                                ) : (
-                                                    <div className="text-[11px] text-muted-foreground text-center">—</div>
-                                                )}
-                                                <div className="flex items-center gap-0.5">
-                                                    <Button variant="ghost" size="icon" className="size-7" onClick={() => moveItem(idx, -1)} disabled={idx === 0}><ArrowUp className="size-3.5" /></Button>
-                                                    <Button variant="ghost" size="icon" className="size-7" onClick={() => moveItem(idx, 1)} disabled={idx === (config.items!.length - 1)}><ArrowDown className="size-3.5" /></Button>
-                                                    <Button variant="ghost" size="icon" className="size-7 text-destructive hover:bg-destructive/10" onClick={() => removeItem(idx)}><Trash2 className="size-3.5" /></Button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                    {config.items!.map((item, idx) => (
+                                        <ItemRow
+                                            key={idx}
+                                            item={item}
+                                            idx={idx}
+                                            layouts={layouts}
+                                            onUpdate={(patch) => updateItem(idx, patch)}
+                                            onRemove={() => removeItem(idx)}
+                                            onMove={(dir) => moveItem(idx, dir)}
+                                            isFirst={idx === 0}
+                                            isLast={idx === config.items!.length - 1}
+                                        />
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -199,11 +185,14 @@ export default function BottomNavPage() {
                     {/* Preview */}
                     <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
                         <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold">Vista previa</div>
-                        <div className="relative aspect-[9/16] rounded-2xl border-4 border-slate-800 overflow-hidden bg-gradient-to-br from-slate-800 to-slate-950">
-                            <div className="absolute inset-0 grid place-items-center text-white/40 text-[11px] p-4 text-center">
-                                Contenido de la interface
+                        <div className="relative aspect-[9/16] rounded-2xl border-4 border-slate-800 overflow-hidden" style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #7c3aed 100%)' }}>
+                            <div className="absolute inset-0 grid place-items-center text-white/60 text-[13px] font-bold p-4 text-center">
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Contenido de la interface</div>
+                                    <div className="text-white/40">↓ Tu barra aparece acá abajo ↓</div>
+                                </div>
                             </div>
-                            <BottomNav config={config} />
+                            <BottomNav config={config} positionMode="absolute" />
                         </div>
                         <div className="text-[10px] text-muted-foreground text-center">
                             Aparecerá así en todas las interfaces del player si está activada.
@@ -215,3 +204,119 @@ export default function BottomNavPage() {
         </div>
     );
 }
+
+const ItemRow: React.FC<{
+    item: any;
+    idx: number;
+    layouts: Array<{ _id: string; name: string }>;
+    onUpdate: (patch: any) => void;
+    onRemove: () => void;
+    onMove: (dir: -1 | 1) => void;
+    isFirst: boolean;
+    isLast: boolean;
+    depth?: number;
+}> = ({ item, idx, layouts, onUpdate, onRemove, onMove, isFirst, isLast, depth = 0 }) => {
+    const [expanded, setExpanded] = React.useState(false);
+    const IconComp: any = (Icons as any)[item.icon || 'Circle'] || Icons.Circle;
+    const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+    const childrenArr = Array.isArray(item.children) ? item.children : [];
+    const iconIsUrl = !!(item.icon && (item.icon.startsWith('/uploads/') || item.icon.startsWith('http')));
+
+    const updateChild = (childIdx: number, patch: any) => {
+        const next = [...childrenArr];
+        next[childIdx] = { ...next[childIdx], ...patch };
+        onUpdate({ children: next });
+    };
+    const removeChild = (childIdx: number) => onUpdate({ children: childrenArr.filter((_: any, i: number) => i !== childIdx) });
+    const moveChild = (childIdx: number, dir: -1 | 1) => {
+        const next = [...childrenArr];
+        const t = childIdx + dir;
+        if (t < 0 || t >= next.length) return;
+        [next[childIdx], next[t]] = [next[t], next[childIdx]];
+        onUpdate({ children: next });
+    };
+    const addChild = () => onUpdate({ children: [...childrenArr, { icon: 'Circle', label: 'Nuevo', action: 'GO_TO', layoutId: '' }] });
+
+    const canHaveSubmenu = depth < 1; // solo 1 nivel de profundidad
+
+    return (
+        <div className={"rounded border " + (depth > 0 ? "bg-background border-primary/30 ml-8" : "bg-muted/30")}>
+            <div className="grid grid-cols-[auto_100px_1fr_140px_140px_auto] gap-2 items-center p-2">
+                <div className="size-10 rounded grid place-items-center bg-background border overflow-hidden" style={{ color: item.color || undefined }}>
+                    {iconIsUrl
+                        ? <img src={item.icon} alt="" className="size-6 object-contain" />
+                        : <IconComp className="size-5" />
+                    }
+                </div>
+                <div className="flex gap-1 items-center">
+                    <Select value={strval((item.icon && !item.icon.startsWith('/') && !item.icon.startsWith('http')) ? item.icon : 'Home', 'Home')} onValueChange={(v: string | null) => onUpdate({ icon: v || 'Home' })}>
+                        <SelectTrigger className="h-9 text-[11px] flex-1 min-w-0"><SelectValue /></SelectTrigger>
+                        <SelectContent className="max-h-60 overflow-y-auto">
+                            {ICON_CHOICES.map(ic => <SelectItem key={ic} value={ic}>{ic}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <label className="cursor-pointer size-9 rounded border grid place-items-center hover:bg-accent" title="Subir PNG custom">
+                        <Upload className="size-3.5 text-muted-foreground" />
+                        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={async (e) => {
+                            const f = e.target.files?.[0]; if (!f) return;
+                            const url = await uploadIcon(f);
+                            if (url) onUpdate({ icon: url }); else toast.error('No se pudo subir el ícono');
+                            e.target.value = '';
+                        }} />
+                    </label>
+                </div>
+                <Input value={strval(item.label)} onChange={(e) => onUpdate({ label: e.target.value })} placeholder="Etiqueta" className="h-9 text-[12px]" />
+                <Select value={strval(item.action, 'GO_TO')} onValueChange={(v: string | null) => onUpdate({ action: (v || 'GO_TO') as any })}>
+                    <SelectTrigger className="h-9 text-[11px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="GO_TO">Ir a interface</SelectItem>
+                        <SelectItem value="BACK">← Atrás</SelectItem>
+                        <SelectItem value="HOME">⌂ Inicio</SelectItem>
+                    </SelectContent>
+                </Select>
+                {item.action === 'GO_TO' ? (
+                    <Select value={strval(item.layoutId)} onValueChange={(v: string | null) => onUpdate({ layoutId: v || '' })}>
+                        <SelectTrigger className="h-9 text-[11px]"><SelectValue placeholder="— Elegí interface —" /></SelectTrigger>
+                        <SelectContent className="max-h-60">{layouts.map(l => <SelectItem key={l._id} value={l._id}>{l.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                ) : (
+                    <div className="text-[11px] text-muted-foreground text-center">—</div>
+                )}
+                <div className="flex items-center gap-0.5">
+                    <Button variant="ghost" size="icon" className="size-7" onClick={() => onMove(-1)} disabled={isFirst}><ArrowUp className="size-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="size-7" onClick={() => onMove(1)} disabled={isLast}><ArrowDown className="size-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="size-7 text-destructive hover:bg-destructive/10" onClick={onRemove}><Trash2 className="size-3.5" /></Button>
+                </div>
+            </div>
+            {/* Toggle submenu */}
+            {canHaveSubmenu && (
+                <div className="border-t px-2 py-1.5 flex items-center gap-2 bg-background/50">
+                    <button onClick={() => setExpanded(v => !v)} className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-primary flex items-center gap-1">
+                        {expanded ? '▼' : '▶'} Sub-menú ({childrenArr.length})
+                    </button>
+                    {expanded && (
+                        <Button size="sm" variant="outline" onClick={addChild} className="h-6 text-[10px] gap-1"><Plus className="size-3" /> Agregar sub-item</Button>
+                    )}
+                </div>
+            )}
+            {canHaveSubmenu && expanded && childrenArr.length > 0 && (
+                <div className="border-t bg-background/30 p-2 space-y-2">
+                    {childrenArr.map((child: any, ci: number) => (
+                        <ItemRow
+                            key={ci}
+                            item={child}
+                            idx={ci}
+                            layouts={layouts}
+                            onUpdate={(patch) => updateChild(ci, patch)}
+                            onRemove={() => removeChild(ci)}
+                            onMove={(dir) => moveChild(ci, dir)}
+                            isFirst={ci === 0}
+                            isLast={ci === childrenArr.length - 1}
+                            depth={depth + 1}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
