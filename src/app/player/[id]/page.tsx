@@ -661,18 +661,36 @@ export default function PlayerPage() {
                 </>
             )}
 
-            {/* AnimatePresence sólo para los WIDGETS del layout (transición iOS) */}
-            <AnimatePresence mode="wait" initial={false}>
+            {/* AnimatePresence sólo para los WIDGETS del layout (transición iOS con dirección dinámica).
+                Usa variants + custom={navDirection} para que el EXIT reciba la dirección actualizada
+                (Framer Motion snapshotea props al montar, custom fuerza re-eval al desmontar). */}
+            <AnimatePresence mode="wait" initial={false} custom={navDirection}>
                 {layout ? (
                     <motion.div
                         key={layout.id || layout._id}
-                        initial={{ x: navDirection === 'pop' ? '-20%' : '100%', opacity: navDirection === 'pop' ? 0.8 : 1 }}
-                        animate={{ x: 0, opacity: 1, pointerEvents: 'auto' as any }}
-                        exit={{ x: navDirection === 'pop' ? '100%' : '-20%', opacity: navDirection === 'pop' ? 1 : 0.8, pointerEvents: 'none' as any, transition: { duration: 0.15, ease: [0.32, 0.72, 0, 1] } }}
-                        transition={{
-                            duration: 0.18,
-                            ease: [0.32, 0.72, 0, 1]
+                        custom={navDirection}
+                        variants={{
+                            enter: (dir: 'push' | 'pop') => ({
+                                x: dir === 'pop' ? '-100%' : '100%',
+                                opacity: 1,
+                                pointerEvents: 'none' as any,
+                            }),
+                            center: {
+                                x: 0,
+                                opacity: 1,
+                                pointerEvents: 'auto' as any,
+                                transition: { duration: 0.28, ease: [0.32, 0.72, 0, 1] },
+                            },
+                            exit: (dir: 'push' | 'pop') => ({
+                                x: dir === 'pop' ? '100%' : '-100%',
+                                opacity: 1,
+                                pointerEvents: 'none' as any,
+                                transition: { duration: 0.24, ease: [0.32, 0.72, 0, 1] },
+                            }),
                         }}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
                         className="absolute inset-0 w-full h-full z-10"
                     >
                         {/* 5. Widgets Layer - Scaled to fit while maintaining aspect ratio */}
