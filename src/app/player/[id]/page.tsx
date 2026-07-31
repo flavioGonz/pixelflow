@@ -21,8 +21,8 @@ const TRANSITION_VARIANTS: Record<string, { initial: any; animate: any; exit: an
     zoom:      { initial: { opacity: 0, scale: 0.85 },                 animate: { opacity: 1, scale: 1 },    exit: { opacity: 0, scale: 1.1 } },
     zoomOut:   { initial: { opacity: 0, scale: 1.2 },                  animate: { opacity: 1, scale: 1 },    exit: { opacity: 0, scale: 0.85 } },
     flip:      { initial: { opacity: 0, rotateY: 90 },                 animate: { opacity: 1, rotateY: 0 },  exit: { opacity: 0, rotateY: -90 } },
-    blur:      { initial: { opacity: 0, filter: 'blur(20px)' },        animate: { opacity: 1, filter: 'blur(0px)' }, exit: { opacity: 0, filter: 'blur(20px)' } },
-    dramatic:  { initial: { opacity: 0, y: 30, scale: 0.9, filter: 'blur(10px)' }, animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 1.1, filter: 'blur(20px)' } },
+    blur:      { initial: { opacity: 0, filter: 'blur(20px)' },        animate: { opacity: 1, filter: 'blur(0px)' }, exit: { opacity: 0 } },
+    dramatic:  { initial: { opacity: 0, y: 30, scale: 0.9, filter: 'blur(10px)' }, animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 1.05, y: -10 } },
 };
 function getTransition(layout: any) {
     const key = layout?.transition || 'dramatic';
@@ -245,12 +245,12 @@ export default function PlayerPage() {
     useEffect(() => {
         if (!id) return;
         const cached = localStorage.getItem(`pixelflow_cache_${id}`);
+        const cachedAuth = localStorage.getItem(`pixelflow_auth_${id}`);
         if (cached) {
             try {
                 const parsed = JSON.parse(cached);
-                // Only set if we don't have a layout yet
                 setLayout(parsed);
-                setAuthorized(true);
+                if (cachedAuth === '1') setAuthorized(true);
             } catch (e) {
                 console.error("Cache error", e);
             }
@@ -353,12 +353,19 @@ export default function PlayerPage() {
             }
             // Save to cache for offline use
             localStorage.setItem(`pixelflow_cache_${id}`, JSON.stringify(newLayout));
+            localStorage.setItem(`pixelflow_auth_${id}`, '1');
             setAuthorized(true);
         });
 
         socket.on('unauthorized', () => {
             setAuthorized(false);
-            setLayout(null as any);
+            // Tanda 1: mantener el último layout visible atrás en vez de limpiarlo,
+            // para no perder contenido si es un re-auth transitorio.
+        });
+
+        // Tanda 1: estado explícito de autorización del servidor
+        socket.on('screen_state', (st: any) => {
+            if (st && typeof st.isAuthorized === 'boolean') setAuthorized(st.isAuthorized);
         });
 
         socket.on('screen_config', (cfg: any) => {
@@ -583,8 +590,8 @@ export default function PlayerPage() {
                     >
                         {/* iOS-style transition: no cinematic flash */}
 
-                        {/* 1. Background Media Layer */}
-                        <div className="absolute inset-0 z-0 overflow-hidden">
+                        {/* 1. Background Media Layer — key por URL para no remontar si es la misma */}
+                        <div key={"bg-" + (layout.backgroundVideo || layout.backgroundImage || 'none')} className="absolute inset-0 z-0 overflow-hidden">
                             {youtubeId ? (
                                 <div className="relative w-[300%] h-[300%] -top-[100%] -left-[100%] pointer-events-none">
                                     <iframe
@@ -602,6 +609,7 @@ export default function PlayerPage() {
                                     muted
                                     loop
                                     playsInline
+                                    preload="auto"
                                 />
                             ) : layout.backgroundImage ? (
                                 <motion.div
@@ -691,7 +699,7 @@ export default function PlayerPage() {
                                                 transition={{
                                                     duration: (layout as any).transitionDuration ?? 0.7,
                                                     ease: [0.16, 1, 0.3, 1],
-                                                    delay: 0.05 + (layout.widgets.indexOf(widget) * 0.04)
+                                                    delay: 0.01 + Math.min(layout.widgets.indexOf(widget) * 0.02, 0.3)
                                                 }}
                                                 className="w-full h-full"
                                             >

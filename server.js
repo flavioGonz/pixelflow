@@ -755,6 +755,13 @@ nextApp.prepare().then(() => {
                     screensaverRotateMs: screen.screensaverRotateMs || 10000
                 });
 
+                // Tanda 1: SIEMPRE emitir estado explícito de autorización,
+                // así el player no depende de recibir update_layout para saberse autorizado.
+                socket.emit('screen_state', {
+                    isAuthorized: !!screen.isAuthorized,
+                    hasLayout: !!screen.lastLayoutId,
+                });
+
                 // If screen is authorized and has a last layout, send it
                 if (screen.isAuthorized && screen.lastLayoutId) {
                     const layout = await Layout.findById(screen.lastLayoutId);
