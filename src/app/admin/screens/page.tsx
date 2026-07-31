@@ -446,32 +446,39 @@ export default function ScreensPage() {
                                                                 <Shield className="size-3.5" /> Autorizar
                                                             </Button>
                                                         )}
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger
-                                                                className="inline-flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                                                title="Comandos remotos"
-                                                                aria-label="Comandos remotos"
-                                                            >
-                                                                <Zap className="size-4" />
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end" className="w-56">
-                                                                <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Comandos remotos</DropdownMenuLabel>
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuItem onClick={() => cmdSoftRefresh(s)} disabled={!isOnline}>
-                                                                    <RefreshCw className="size-3.5 mr-2" /> Refresh suave
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={() => cmdHardReload(s)} disabled={!isOnline}>
-                                                                    <RotateCw className="size-3.5 mr-2" /> Reload completo
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={() => setForceLayoutFor({ screenId: s.screenId, name: s.name || s.screenId })} disabled={!isOnline}>
-                                                                    <LayoutIcon className="size-3.5 mr-2" /> Forzar interface…
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuItem onClick={() => cmdHealth(s)} disabled={!isOnline}>
-                                                                    <Activity className="size-3.5 mr-2" /> Health check
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
+                                                        {/* Comandos remotos: 4 botones inline */}
+                                                        <Tooltip>
+                                                            <TooltipTrigger>
+                                                                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => cmdSoftRefresh(s)} disabled={!isOnline}>
+                                                                    <RefreshCw className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Refresh suave — re-fetch layout</TooltipContent>
+                                                        </Tooltip>
+                                                        <Tooltip>
+                                                            <TooltipTrigger>
+                                                                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => cmdHardReload(s)} disabled={!isOnline}>
+                                                                    <RotateCw className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Reload completo (F5)</TooltipContent>
+                                                        </Tooltip>
+                                                        <Tooltip>
+                                                            <TooltipTrigger>
+                                                                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => setForceLayoutFor({ screenId: s.screenId, name: s.name || s.screenId })} disabled={!isOnline}>
+                                                                    <LayoutIcon className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Forzar interface</TooltipContent>
+                                                        </Tooltip>
+                                                        <Tooltip>
+                                                            <TooltipTrigger>
+                                                                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => cmdHealth(s)} disabled={!isOnline}>
+                                                                    <Activity className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Health check</TooltipContent>
+                                                        </Tooltip>
                                                         <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => setToDelete(s)} title="Eliminar pantalla">
                                                             <Trash2 className="size-4" />
                                                         </Button>
