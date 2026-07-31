@@ -28,6 +28,9 @@ const LayoutSchema = new mongoose.Schema({
     designWidth: { type: Number },
     designHeight: { type: Number },
     targetDPI: { type: Number, default: 96 },
+    // Transición al abrir esta interface (framer-motion)
+    transition: { type: String, default: 'dramatic' },
+    transitionDuration: { type: Number, default: 0.7 },
     // Screensaver mode
     isScreensaver: { type: Boolean, default: false },
     modifiedBy: { type: String, default: 'Admin' },
@@ -35,9 +38,8 @@ const LayoutSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now },
 });
 
-LayoutSchema.pre('save', function (next) {
+LayoutSchema.pre('save', async function () {
     this.updatedAt = Date.now();
-    next();
 });
 
 module.exports = mongoose.models.Layout || mongoose.model('Layout', LayoutSchema);
