@@ -11,7 +11,7 @@
  *   resto                     → network-first
  */
 
-const VERSION = "v7";
+const VERSION = "v8";
 const CACHE_STATIC = 'pf-static-' + VERSION;
 const CACHE_MEDIA  = 'pf-media-' + VERSION;
 const CACHE_API    = 'pf-api-' + VERSION;
@@ -40,7 +40,7 @@ async function cacheFirst(request, cacheName) {
     if (cached) return cached;
     try {
         const resp = await fetch(request);
-        if (resp && resp.status === 200) cache.put(request, resp.clone());
+        if (resp && resp.ok) cache.put(request, resp.clone());
         return resp;
     } catch (e) {
         return cached || Response.error();
@@ -51,7 +51,7 @@ async function staleWhileRevalidate(request, cacheName) {
     const cache = await caches.open(cacheName);
     const cached = await cache.match(request);
     const netFetch = fetch(request).then((resp) => {
-        if (resp && resp.status === 200) cache.put(request, resp.clone());
+        if (resp && resp.ok) cache.put(request, resp.clone());
         return resp;
     }).catch(() => null);
     return cached || (await netFetch) || Response.error();
@@ -60,7 +60,7 @@ async function staleWhileRevalidate(request, cacheName) {
 async function networkFirst(request, cacheName) {
     try {
         const resp = await fetch(request);
-        if (resp && resp.status === 200 && cacheName) {
+        if (resp && resp.ok && cacheName) {
             const cache = await caches.open(cacheName);
             cache.put(request, resp.clone());
         }
@@ -93,8 +93,8 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(cacheFirst(req, CACHE_MEDIA));
         return;
     }
-    // Chunks JS/CSS con hash → cache-first
-    if (url.pathname.startsWith('/_next/static/')) {
+    // Chunks JS/CSS con hash → cache-first (alias assetPrefix también)
+    if (url.pathname.startsWith('/_next/static/') || /^\/pfa-[^/]+\/_next\/static\//.test(url.pathname)) {
         event.respondWith(cacheFirst(req, CACHE_STATIC));
         return;
     }
