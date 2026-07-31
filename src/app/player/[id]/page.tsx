@@ -846,7 +846,7 @@ export default function PlayerPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
-            <BottomNav config={bottomNavConfig || undefined} currentLayoutId={layout?._id} />
+            <BottomNav config={bottomNavConfig || undefined} currentLayoutId={layout?._id} defaultLayoutId={_defaultLayoutIdRef.current || undefined} />
         
         </main >
     );

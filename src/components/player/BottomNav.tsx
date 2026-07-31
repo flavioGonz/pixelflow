@@ -25,6 +25,7 @@ export type BottomNavConfig = {
 interface BottomNavProps {
     config?: BottomNavConfig;
     currentLayoutId?: string;
+    defaultLayoutId?: string;
     /** absolute posiciona relativo al contenedor (para preview). fixed = pantalla (default player). */
     positionMode?: 'fixed' | 'absolute';
 }
@@ -34,7 +35,7 @@ interface BottomNavProps {
  * Cuando un item tiene children[], al tocarlo la barra hace slide iOS mostrando los sub-items,
  * con un botón "← Atrás" al inicio para volver al nivel anterior.
  */
-export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, positionMode = 'fixed' }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, defaultLayoutId, positionMode = 'fixed' }) => {
     // Stack de navegación: cada elemento es una lista de items (nivel actual).
     const [stack, setStack] = React.useState<BottomNavItem[][]>([]);
     const [direction, setDirection] = React.useState<'push' | 'pop'>('push');
@@ -46,7 +47,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, p
     }, [config?.items]);
 
     if (!config?.enabled) return null;
-    const rootItems = (config.items || []).filter(it => it && (
+    const isAwayFromHome = !!(defaultLayoutId && currentLayoutId && currentLayoutId !== defaultLayoutId);
+    const rawItems = (config.items || []).map((it) => {
+        // Si estamos fuera del home, mutar action=HOME → action=BACK (label 'Atrás', ícono ChevronLeft)
+        if (isAwayFromHome && it && it.action === 'HOME') {
+            return { ...it, _isMutatedBack: true, action: 'BACK' as any, label: 'Atrás', icon: 'ChevronLeft' };
+        }
+        return it;
+    });
+    const rootItems = rawItems.filter(it => it && (
         it.action === 'BACK' || it.action === 'HOME' ||
         (it.action === 'GO_TO' && it.layoutId) ||
         (it.children && it.children.length > 0)
@@ -64,7 +73,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, p
         ? 'bg-black/90 text-white border-white/10'
         : theme === 'solid-light'
             ? 'bg-white/95 text-slate-900 border-black/10'
-            : 'bg-white/70 text-slate-900 backdrop-blur-2xl backdrop-saturate-150 border-white/60 shadow-slate-900/20';
+            : 'bg-white/40 text-slate-900 backdrop-blur-3xl backdrop-saturate-200 border-white/40 shadow-slate-900/25';
 
     const enterSubmenu = (item: BottomNavItem) => {
         if (!item.children || item.children.length === 0) return;
