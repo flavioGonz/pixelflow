@@ -902,59 +902,23 @@ nextApp.prepare().then(() => {
                  "if (typeof window !== 'undefined') { window.location.reload(); }\n");
     });
 
-        // [pfa-alias] Servir todos los assets _next/static bajo un path alias /pfa-BUILDID/
-    // que NPM/OpenResty nunca vio → el proxy pasa al origen → sirve 200.
-    // Con cada rebuild el BUILD_ID cambia → alias nuevo → cache stale del proxy queda irrelevante.
+            // [pfa-static] Servir assets bajo /pfa-BUILDID/ (Next.js los genera con este prefix vía assetPrefix)
     (function () {
         const _fs = require('fs');
         const _path = require('path');
-        let _buildId = 'v' + Date.now();
+        let _bid = 'unknown';
         try {
-            const bp = _path.join(__dirname, '.next', 'BUILD_ID');
-            if (_fs.existsSync(bp)) _buildId = _fs.readFileSync(bp, 'utf8').trim();
+            const bp = _path.join(__dirname, '.next-buildid');
+            if (_fs.existsSync(bp)) _bid = _fs.readFileSync(bp, 'utf8').trim();
         } catch {}
-        const ALIAS = '/pfa-' + _buildId;
-        console.log('[pfa-alias] serving _next/static under', ALIAS);
-
-        // 1) Alias physical serving: /pfa-BUILDID/* → .next/static/*
-        expressApp.use(ALIAS, express.static(_path.join(__dirname, '.next', 'static'), {
+        const ALIAS = '/pfa-' + _bid;
+        console.log('[pfa-static] serving _next/static under', ALIAS, '+ /_next/static fallback');
+        // Alias principal
+        expressApp.use(ALIAS + '/_next/static', express.static(_path.join(__dirname, '.next', 'static'), {
             immutable: true,
             maxAge: '365d',
             setHeaders: (res) => res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'),
         }));
-
-        // 2) HTML rewrite: reemplazar /_next/static/ por /pfa-BUILDID/ en respuestas HTML
-        expressApp.use((req, res, next) => {
-            // Solo interceptar respuestas HTML (páginas del app router)
-            const accept = req.headers.accept || '';
-            if (!accept.includes('text/html')) return next();
-            // html-nostore: forzar que browsers y proxies NO cacheen HTML → siempre pedimos el HTML actual con chunks nuevos
-            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-            res.setHeader('Pragma', 'no-cache');
-            res.setHeader('Expires', '0');
-            const origSend = res.send.bind(res);
-            const origEnd = res.end.bind(res);
-            const rewrite = (body) => {
-                if (typeof body !== 'string') return body;
-                // Agregar ?v=BUILD_ID a src/href de chunks _next/static
-                return body.replace(/\/_next\/static\//g, ALIAS + '/');
-            };
-            res.send = function (body) {
-                try { body = rewrite(body); } catch {}
-                return origSend(body);
-            };
-            res.end = function (chunk, encoding, cb) {
-                try {
-                    if (typeof chunk === 'string') chunk = rewrite(chunk);
-                    else if (Buffer.isBuffer(chunk)) {
-                        const s = chunk.toString('utf8');
-                        if (s.includes('/_next/static/')) chunk = Buffer.from(rewrite(s), 'utf8');
-                    }
-                } catch {}
-                return origEnd(chunk, encoding, cb);
-            };
-            next();
-        });
     })();
 
         expressApp.all(/.*/, (req, res) => {
