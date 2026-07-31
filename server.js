@@ -902,6 +902,46 @@ nextApp.prepare().then(() => {
                  "if (typeof window !== 'undefined') { window.location.reload(); }\n");
     });
 
+        // Rewrite HTML output: agregar ?v=BUILD_ID a URLs de chunks _next/static
+    // Esto FUERZA a NPM/OpenResty a re-consultar chunks porque nunca ha visto esas URLs.
+    // Rompe el problema de "chunk 404 zombie" cacheado por el proxy después de un rebuild. [chunk-cachebust]
+    (function () {
+        const _fs = require('fs');
+        const _path = require('path');
+        let _buildId = 'v' + Date.now();
+        try {
+            const bp = _path.join(__dirname, '.next', 'BUILD_ID');
+            if (_fs.existsSync(bp)) _buildId = _fs.readFileSync(bp, 'utf8').trim();
+        } catch {}
+        expressApp.use((req, res, next) => {
+            // Solo interceptar respuestas HTML (páginas del app router)
+            const accept = req.headers.accept || '';
+            if (!accept.includes('text/html')) return next();
+            const origSend = res.send.bind(res);
+            const origEnd = res.end.bind(res);
+            const rewrite = (body) => {
+                if (typeof body !== 'string') return body;
+                // Agregar ?v=BUILD_ID a src/href de chunks _next/static
+                return body.replace(/(\/_next\/static\/[^"'?]+)/g, (m) => m + '?v=' + _buildId);
+            };
+            res.send = function (body) {
+                try { body = rewrite(body); } catch {}
+                return origSend(body);
+            };
+            res.end = function (chunk, encoding, cb) {
+                try {
+                    if (typeof chunk === 'string') chunk = rewrite(chunk);
+                    else if (Buffer.isBuffer(chunk)) {
+                        const s = chunk.toString('utf8');
+                        if (s.includes('/_next/static/')) chunk = Buffer.from(rewrite(s), 'utf8');
+                    }
+                } catch {}
+                return origEnd(chunk, encoding, cb);
+            };
+            next();
+        });
+    })();
+
         expressApp.all(/.*/, (req, res) => {
         const parsedUrl = parse(req.url, true);
         handle(req, res, parsedUrl);
