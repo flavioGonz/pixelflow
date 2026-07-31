@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>PixelFlow</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #0b1220;
+            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* --- Splash --- */
+        #splash {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, #0b1220 0%, #1e293b 100%);
+            transition: opacity .3s;
+        }
+        #splash h1 {
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: -1px;
+            margin: 0 0 8px;
+            background: linear-gradient(90deg, #0ea5e9, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        #splash .sub {
+            font-size: 13px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.3em;
+            font-weight: 700;
+        }
+        #splash .spin {
+            margin-top: 30px;
+            width: 32px; height: 32px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #0ea5e9;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- Setup screen --- */
+        #setup {
+            position: fixed;
+            inset: 0;
+            display: none;
+            padding: 40px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+        #setup.active { display: flex; }
+        #setup h1 { font-size: 32px; margin: 0; font-weight: 800; }
+        #setup .hint { color: #94a3b8; font-size: 15px; max-width: 500px; text-align: center; line-height: 1.5; }
+        #setup .card {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            width: 100%;
+            max-width: 640px;
+        }
+        #setup .row {
+            display: flex; gap: 8px; align-items: center; padding: 14px;
+            border-radius: 8px; border: 1px solid transparent;
+            background: #1e293b;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: all .15s;
+        }
+        #setup .row:hover, #setup .row:focus {
+            border-color: #0ea5e9;
+            background: #1e293b;
+            transform: translateY(-1px);
+        }
+        #setup .row .dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #64748b; flex-shrink: 0;
+        }
+        #setup .row.online .dot { background: #10b981; box-shadow: 0 0 8px #10b981; }
+        #setup .row .name { flex: 1; font-weight: 600; font-size: 15px; }
+        #setup .row .id { color: #64748b; font-family: monospace; font-size: 11px; }
+        #setup .row .badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: #0ea5e9; color: white; }
+        #setup .row.online .badge { background: #10b981; }
+        #setup .manual {
+            display: flex; gap: 8px; margin-top: 16px;
+        }
+        #setup input {
+            flex: 1; padding: 12px 14px; border-radius: 8px;
+            background: #1e293b; border: 1px solid #334155; color: #e2e8f0;
+            font-family: monospace; font-size: 14px;
+        }
+        #setup button {
+            padding: 12px 20px; border-radius: 8px; border: 0;
+            background: #0ea5e9; color: white; font-weight: 700;
+            cursor: pointer; font-size: 14px;
+        }
+        #setup button:disabled { opacity: 0.4; cursor: not-allowed; }
+        #setup .error { color: #ef4444; font-size: 13px; text-align: center; }
+        #setup .reset {
+            margin-top: 20px; font-size: 11px; color: #64748b;
+            text-transform: uppercase; letter-spacing: 0.15em; cursor: pointer;
+        }
+
+        /* --- Player iframe (fullscreen) --- */
+        #player {
+            position: fixed; inset: 0;
+            width: 100%; height: 100%;
+            border: 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="splash">
+        <div style="text-align: center;">
+            <h1>PixelFlow</h1>
+            <div class="sub">Digital Signage · webOS</div>
+            <div class="spin"></div>
+        </div>
+    </div>
+
+    <div id="setup">
+        <h1>Elegí esta pantalla</h1>
+        <p class="hint">Es la primera vez que corrés PixelFlow en este monitor. Tocá el nombre de la pantalla que corresponde, o pegá el screenId manualmente. Sólo hace falta una vez.</p>
+        <div class="card">
+            <div id="screensList"></div>
+            <div class="manual">
+                <input id="manualId" type="text" placeholder="pantalla-XX  o  screenId manual" autocomplete="off" />
+                <button id="manualGo">Usar</button>
+            </div>
+            <div id="errorMsg" class="error" style="margin-top:12px;display:none;"></div>
+        </div>
+        <div class="reset" onclick="location.reload()">↻ Recargar lista</div>
+    </div>
+
+    <iframe id="player" allow="fullscreen; autoplay; camera; microphone" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"></iframe>
+
+    <script>
+    (function () {
+        var SERVER_URL = 'https://altosdelarapey.infratec.com.uy';
+        var STORAGE_KEY = 'pixelflow_screen_id';
+
+        var $ = function (id) { return document.getElementById(id); };
+
+        function launchPlayer(screenId) {
+            try { localStorage.setItem(STORAGE_KEY, screenId); } catch (e) {}
+            var url = SERVER_URL + '/player/' + encodeURIComponent(screenId);
+            var iframe = $('player');
+            iframe.style.display = 'block';
+            iframe.src = url;
+            $('splash').style.display = 'none';
+            $('setup').classList.remove('active');
+        }
+
+        function showSetup() {
+            $('splash').style.display = 'none';
+            $('setup').classList.add('active');
+            loadScreens();
+        }
+
+        function loadScreens() {
+            var list = $('screensList');
+            list.innerHTML = '<div style="text-align:center;color:#64748b;padding:20px;">Cargando pantallas registradas…</div>';
+            fetch(SERVER_URL + '/api/screens/list')
+                .catch(function () { return null; })
+                .then(function (r) { return r ? r.json() : Promise.resolve([]); })
+                .catch(function () { return []; })
+                .then(function (screens) {
+                    if (!Array.isArray(screens) || screens.length === 0) {
+                        list.innerHTML = '<div style="text-align:center;color:#64748b;padding:20px;font-size:13px;">Sin pantallas registradas todavía en el servidor.<br/>Pegá el screenId abajo, o abrí el player desde el admin primero para que se registre solo.</div>';
+                        return;
+                    }
+                    list.innerHTML = screens.map(function (s) {
+                        var online = s.lastSeen && (Date.now() - new Date(s.lastSeen).getTime() < 60000);
+                        var authorized = s.isAuthorized ? '' : ' · sin autorizar';
+                        return '<div class="row ' + (online ? 'online' : '') + '" tabindex="0" data-id="' + s.screenId + '">' +
+                            '<span class="dot"></span>' +
+                            '<div class="name">' + (s.name || s.screenId) + authorized + '</div>' +
+                            '<div class="id">' + s.screenId + '</div>' +
+                            '<span class="badge">' + (online ? 'Online' : (s.isAuthorized ? 'Offline' : 'Pending')) + '</span>' +
+                        '</div>';
+                    }).join('');
+                    Array.prototype.forEach.call(list.querySelectorAll('[data-id]'), function (el) {
+                        el.addEventListener('click', function () { launchPlayer(el.getAttribute('data-id')); });
+                    });
+                });
+        }
+
+        $('manualGo').addEventListener('click', function () {
+            var id = $('manualId').value.trim();
+            if (!id) return;
+            launchPlayer(id);
+        });
+        $('manualId').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') $('manualGo').click();
+        });
+
+        // Bootstrap
+        window.addEventListener('load', function () {
+            var stored;
+            try { stored = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+            if (stored) {
+                launchPlayer(stored);
+            } else {
+                setTimeout(showSetup, 400);
+            }
+        });
+
+        // WebOS "Back" key → NO salir de la app
+        document.addEventListener('keydown', function (e) {
+            if (e.keyCode === 461 || e.key === 'GoBack') e.preventDefault();
+        });
+
+        // Long press en esquina superior izquierda → reset del screenId (útil si mezcló pantallas)
+        var pressStart = null;
+        document.addEventListener('pointerdown', function (e) {
+            if (e.clientX < 60 && e.clientY < 60) {
+                pressStart = Date.now();
+            }
+        });
+        document.addEventListener('pointerup', function () {
+            if (pressStart && (Date.now() - pressStart > 5000)) {
+                if (confirm('¿Resetear PixelFlow y volver a la selección de pantalla?')) {
+                    try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
+                    location.reload();
+                }
+            }
+            pressStart = null;
+        });
+    })();
+    </script>
+</body>
+</html>

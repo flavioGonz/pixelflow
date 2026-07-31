@@ -687,7 +687,20 @@ nextApp.prepare().then(() => {
         }
     });
 
-    // GET /api/uploads/usage → mapa { [url]: [{ _id, name }] } de layouts que usan cada archivo
+    // GET /api/screens/list → lista pública de pantallas registradas (para app WebOS y otros)
+    expressApp.get('/api/screens/list', async (req, res) => {
+        try {
+            const screens = await Screen.find({}, {
+                screenId: 1, name: 1, lastSeen: 1, isAuthorized: 1, viewport: 1
+            }).lean();
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.json(screens);
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+        // GET /api/uploads/usage → mapa { [url]: [{ _id, name }] } de layouts que usan cada archivo
     expressApp.get('/api/uploads/usage', async (req, res) => {
         try {
             const layouts = await Layout.find({}, { name: 1, backgroundImage: 1, backgroundVideo: 1, widgets: 1 }).lean();

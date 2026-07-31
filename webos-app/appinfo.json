@@ -1,0 +1,25 @@
+{
+    "id": "uy.com.infratec.pixelflow",
+    "version": "1.0.0",
+    "vendor": "Infratec Uruguay",
+    "type": "web",
+    "main": "index.html",
+    "title": "PixelFlow",
+    "appDescription": "Digital signage player para hoteles y espacios comerciales.",
+    "icon": "icon.png",
+    "largeIcon": "largeIcon.png",
+    "iconColor": "#0ea5e9",
+    "splashBackground": "#0b1220",
+    "disableBackHistoryAPI": true,
+    "transparent": false,
+    "resolution": "1920x1080",
+    "supportPortraitMode": true,
+    "supportTouchMode": "full",
+    "trustLevel": "trusted",
+    "handlesRelaunch": true,
+    "requiredMemory": 200,
+    "policyOverride": {
+        "allowUnifiedSearch": false,
+        "allowVirtualTouch": true
+    }
+}
