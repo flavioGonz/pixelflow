@@ -31,6 +31,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useEditorShortcuts } from '@/hooks/useEditorShortcuts';
 import { WidgetPalette } from '@/components/builder/WidgetPalette';
 import { CategoryItemsEditor } from '@/components/admin/CategoryItemsEditor';
+import { MediaPicker } from '@/components/admin/MediaPicker';
 import { CategoryNavPanel } from '@/components/admin/CategoryNavPanel';
 import { FloatingToolbar } from '@/components/builder/FloatingToolbar';
 import { StatusBar } from '@/components/builder/StatusBar';
