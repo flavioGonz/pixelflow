@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { BottomNav, BottomNavConfig } from '@/components/player/BottomNav';
 import { DndContext, useSensor, useSensors, PointerSensor, DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
 import { restrictToParentElement } from '@dnd-kit/modifiers';
 import { DraggableWidget, type ResizeHandle } from './DraggableWidget';
@@ -73,6 +74,8 @@ export function Canvas({
     const canvasRef = React.useRef<HTMLDivElement>(null);
     const wrapperRef = React.useRef<HTMLDivElement>(null);
     const [canvasSize, setCanvasSize] = React.useState<{ w: number; h: number }>({ w: 0, h: 0 });
+    const [bottomNavConfig, setBottomNavConfig] = React.useState<BottomNavConfig | null>(null);
+    React.useEffect(() => { fetch('/api/settings/bottomnav').then(r => r.ok ? r.json() : null).then(c => c && setBottomNavConfig(c)).catch(() => {}); }, []);
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: { distance: 4 },
@@ -482,6 +485,7 @@ export function Canvas({
                     />
                 ))}
             </div>
+        {bottomNavConfig?.enabled ? <BottomNav config={bottomNavConfig} positionMode="absolute" /> : null}
         </div>
     );
 }

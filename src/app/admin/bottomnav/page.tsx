@@ -37,6 +37,7 @@ export default function BottomNavPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
+    const [iconPickerFor, setIconPickerFor] = useState<{ path: number[] } | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -175,6 +176,7 @@ export default function BottomNavPage() {
                                             onMove={(dir) => moveItem(idx, dir)}
                                             isFirst={idx === 0}
                                             isLast={idx === config.items!.length - 1}
+                                            onOpenIconPicker={() => setIconPickerFor({ path: [idx] })}
                                         />
                                     ))}
                                 </div>
@@ -200,6 +202,28 @@ export default function BottomNavPage() {
                     </div>
                 </div>
             </div>
+            {iconPickerFor && (
+                <IconPickerModal
+                    open={!!iconPickerFor}
+                    onClose={() => setIconPickerFor(null)}
+                    onPickPreset={(name) => {
+                        const items = [...(config.items || [])];
+                        const [i0] = iconPickerFor.path;
+                        if (items[i0]) items[i0] = { ...items[i0], icon: name };
+                        update({ items });
+                        setIconPickerFor(null);
+                    }}
+                    onUpload={async (file) => {
+                        const url = await uploadIcon(file);
+                        if (!url) { toast.error('No se pudo subir'); return; }
+                        const items = [...(config.items || [])];
+                        const [i0] = iconPickerFor.path;
+                        if (items[i0]) items[i0] = { ...items[i0], icon: url };
+                        update({ items });
+                        setIconPickerFor(null);
+                    }}
+                />
+            )}
             <Toaster />
         </div>
     );
@@ -215,7 +239,8 @@ const ItemRow: React.FC<{
     isFirst: boolean;
     isLast: boolean;
     depth?: number;
-}> = ({ item, idx, layouts, onUpdate, onRemove, onMove, isFirst, isLast, depth = 0 }) => {
+    onOpenIconPicker?: () => void;
+}> = ({ item, idx, layouts, onUpdate, onRemove, onMove, isFirst, isLast, depth = 0, onOpenIconPicker }) => {
     const [expanded, setExpanded] = React.useState(false);
     const IconComp: any = (Icons as any)[item.icon || 'Circle'] || Icons.Circle;
     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
@@ -241,30 +266,19 @@ const ItemRow: React.FC<{
 
     return (
         <div className={"rounded border " + (depth > 0 ? "bg-background border-primary/30 ml-8" : "bg-muted/30")}>
-            <div className="grid grid-cols-[auto_100px_1fr_140px_140px_auto] gap-2 items-center p-2">
-                <div className="size-10 rounded grid place-items-center bg-background border overflow-hidden" style={{ color: item.color || undefined }}>
+            <div className="grid grid-cols-[auto_1fr_140px_180px_auto] gap-2 items-center p-2">
+                <button
+                    onClick={() => onOpenIconPicker && onOpenIconPicker()}
+                    className="size-11 rounded-lg grid place-items-center bg-background border-2 border-dashed border-transparent hover:border-primary hover:bg-accent transition-colors overflow-hidden group relative"
+                    style={{ color: item.color || undefined }}
+                    title="Cambiar ícono"
+                >
                     {iconIsUrl
-                        ? <img src={item.icon} alt="" className="size-6 object-contain" />
-                        : <IconComp className="size-5" />
+                        ? <img src={item.icon} alt="" className="size-7 object-contain" />
+                        : <IconComp className="size-6" />
                     }
-                </div>
-                <div className="flex gap-1 items-center">
-                    <Select value={strval((item.icon && !item.icon.startsWith('/') && !item.icon.startsWith('http')) ? item.icon : 'Home', 'Home')} onValueChange={(v: string | null) => onUpdate({ icon: v || 'Home' })}>
-                        <SelectTrigger className="h-9 text-[11px] flex-1 min-w-0"><SelectValue /></SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                            {ICON_CHOICES.map(ic => <SelectItem key={ic} value={ic}>{ic}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <label className="cursor-pointer size-9 rounded border grid place-items-center hover:bg-accent" title="Subir PNG custom">
-                        <Upload className="size-3.5 text-muted-foreground" />
-                        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={async (e) => {
-                            const f = e.target.files?.[0]; if (!f) return;
-                            const url = await uploadIcon(f);
-                            if (url) onUpdate({ icon: url }); else toast.error('No se pudo subir el ícono');
-                            e.target.value = '';
-                        }} />
-                    </label>
-                </div>
+                    <span className="absolute inset-0 bg-black/50 text-white text-[9px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center">Cambiar</span>
+                </button>
                 <Input value={strval(item.label)} onChange={(e) => onUpdate({ label: e.target.value })} placeholder="Etiqueta" className="h-9 text-[12px]" />
                 <Select value={strval(item.action, 'GO_TO')} onValueChange={(v: string | null) => onUpdate({ action: (v || 'GO_TO') as any })}>
                     <SelectTrigger className="h-9 text-[11px]"><SelectValue /></SelectTrigger>
@@ -274,12 +288,17 @@ const ItemRow: React.FC<{
                         <SelectItem value="HOME">⌂ Inicio</SelectItem>
                     </SelectContent>
                 </Select>
-                {item.action === 'GO_TO' ? (
-                    <Select value={strval(item.layoutId)} onValueChange={(v: string | null) => onUpdate({ layoutId: v || '' })}>
-                        <SelectTrigger className="h-9 text-[11px]"><SelectValue placeholder="— Elegí interface —" /></SelectTrigger>
-                        <SelectContent className="max-h-60">{layouts.map(l => <SelectItem key={l._id} value={l._id}>{l.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                ) : (
+                {item.action === 'GO_TO' ? (() => {
+                    const currentName = layouts.find(l => l._id === item.layoutId)?.name;
+                    return (
+                        <Select value={strval(item.layoutId)} onValueChange={(v: string | null) => onUpdate({ layoutId: v || '' })}>
+                            <SelectTrigger className="h-9 text-[11px]">
+                                <span className="truncate">{currentName || <span className="text-muted-foreground">— Elegí interface —</span>}</span>
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60">{layouts.map(l => <SelectItem key={l._id} value={l._id}>{l.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                    );
+                })() : (
                     <div className="text-[11px] text-muted-foreground text-center">—</div>
                 )}
                 <div className="flex items-center gap-0.5">
@@ -317,6 +336,57 @@ const ItemRow: React.FC<{
                     ))}
                 </div>
             )}
+        </div>
+    );
+};
+
+const IconPickerModal: React.FC<{
+    open: boolean;
+    onClose: () => void;
+    onPickPreset: (name: string) => void;
+    onUpload: (file: File) => void;
+}> = ({ open, onClose, onPickPreset, onUpload }) => {
+    if (!open) return null;
+    return (
+        <div className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm grid place-items-center p-6" onClick={onClose}>
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-2xl bg-card border shadow-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-lg font-bold">Elegí un ícono</h3>
+                        <p className="text-[11px] text-muted-foreground">Tocá uno de los presets o subí tu propio PNG.</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={onClose}>Cerrar</Button>
+                </div>
+                <div className="grid grid-cols-6 md:grid-cols-8 gap-2 max-h-[50vh] overflow-y-auto">
+                    {ICON_CHOICES.map((name) => {
+                        const IC: any = (Icons as any)[name] || Icons.Circle;
+                        return (
+                            <button
+                                key={name}
+                                onClick={() => onPickPreset(name)}
+                                className="aspect-square flex flex-col items-center justify-center gap-1 rounded-lg border hover:border-primary hover:bg-accent transition-colors p-2"
+                                title={name}
+                            >
+                                <IC className="size-6" />
+                                <span className="text-[9px] font-bold uppercase tracking-wider truncate w-full text-center">{name}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="border-t pt-4">
+                    <label className="cursor-pointer w-full flex items-center gap-3 rounded-lg border-2 border-dashed border-primary/40 p-4 hover:bg-accent transition-colors">
+                        <Upload className="size-5 text-primary" />
+                        <div className="flex-1">
+                            <div className="text-[13px] font-bold">Subir PNG/JPG custom</div>
+                            <div className="text-[11px] text-muted-foreground">Se ajusta automáticamente al tamaño del botón.</div>
+                        </div>
+                        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={(e) => {
+                            const f = e.target.files?.[0]; if (f) onUpload(f);
+                            e.target.value = '';
+                        }} />
+                    </label>
+                </div>
+            </div>
         </div>
     );
 };
