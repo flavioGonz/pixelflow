@@ -631,15 +631,21 @@ nextApp.prepare().then(() => {
     });
 
     // Tanda 2: Media Library
-    // GET /api/uploads  → lista con metadata
+    // GET /api/uploads  → lista paginada con metadata
+    // Query: ?page=1&pageSize=48&type=image|video|all&q=search
     expressApp.get('/api/uploads', async (req, res) => {
         try {
             const fs = require('fs').promises;
             const path = require('path');
             const dir = uploadDir;
+            const page      = Math.max(1, parseInt(req.query.page)     || 1);
+            const pageSize  = Math.min(200, Math.max(6, parseInt(req.query.pageSize) || 48));
+            const filterType = String(req.query.type || 'all').toLowerCase();
+            const q          = String(req.query.q   || '').toLowerCase();
             const files = await fs.readdir(dir);
             const sharp = (() => { try { return require('sharp'); } catch { return null; } })();
-            const results = [];
+            // Primero: lista rápida SIN sharp (barato), después paginamos, después sharp SOLO para la página visible
+            const rawEntries = [];
             for (const f of files) {
                 if (f.startsWith('.')) continue;
                 try {
@@ -655,18 +661,60 @@ nextApp.prepare().then(() => {
                         mtime: st.mtime.getTime(),
                         type: isImage ? 'image' : (isVideo ? 'video' : 'other'),
                     };
-                    if (isImage && sharp && st.size < 20 * 1024 * 1024) {
-                        try {
-                            const im = await sharp(path.join(dir, f)).metadata();
-                            item.width = im.width;
-                            item.height = im.height;
-                        } catch {}
-                    }
-                    results.push(item);
+                    // Filtros baratos ANTES de sharp
+                    if (filterType !== 'all' && item.type !== filterType) continue;
+                    if (q && !f.toLowerCase().includes(q)) continue;
+                    rawEntries.push(item);
                 } catch {}
             }
-            results.sort((a, b) => b.mtime - a.mtime);
-            res.json(results);
+            rawEntries.sort((a, b) => b.mtime - a.mtime);
+            const total = rawEntries.length;
+            const start = (page - 1) * pageSize;
+            const slice = rawEntries.slice(start, start + pageSize);
+            // Sólo hago sharp para la página visible (cara la op)
+            for (const item of slice) {
+                if (item.type === 'image' && sharp && item.size < 20 * 1024 * 1024) {
+                    try {
+                        const im = await sharp(path.join(dir, item.filename)).metadata();
+                        item.width = im.width;
+                        item.height = im.height;
+                    } catch {}
+                }
+            }
+            res.json({ items: slice, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    // GET /api/uploads/usage → mapa { [url]: [{ _id, name }] } de layouts que usan cada archivo
+    expressApp.get('/api/uploads/usage', async (req, res) => {
+        try {
+            const layouts = await Layout.find({}, { name: 1, backgroundImage: 1, backgroundVideo: 1, widgets: 1 }).lean();
+            const usage = {};
+            const push = (url, layout) => {
+                if (!url || typeof url !== 'string') return;
+                // Normalizar: sólo urls de /uploads/
+                const idx = url.indexOf('/uploads/');
+                const key = idx >= 0 ? url.substring(idx) : url;
+                if (!key.startsWith('/uploads/')) return;
+                if (!usage[key]) usage[key] = [];
+                if (!usage[key].some(l => String(l._id) === String(layout._id))) {
+                    usage[key].push({ _id: layout._id, name: layout.name });
+                }
+            };
+            for (const l of layouts) {
+                push(l.backgroundImage, l);
+                push(l.backgroundVideo, l);
+                for (const w of (l.widgets || [])) {
+                    const d = w.data || {};
+                    push(d.url, l); push(d.imageUrl, l); push(d.videoUrl, l); push(d.src, l); push(d.poster, l);
+                    if (Array.isArray(d.images)) d.images.forEach(u => push(u, l));
+                    if (Array.isArray(d.items)) d.items.forEach(it => { push(it?.imageUrl, l); push(it?.iconUrl, l); push(it?.url, l); });
+                    if (Array.isArray(d.products)) d.products.forEach(p => { push(p?.imageUrl, l); push(p?.photoUrl, l); });
+                }
+            }
+            res.json(usage);
         } catch (e) {
             res.status(500).json({ error: e.message });
         }

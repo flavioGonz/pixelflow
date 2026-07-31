@@ -10,22 +10,33 @@ import Video from 'lucide-react/dist/esm/icons/video';
 import Copy from 'lucide-react/dist/esm/icons/copy';
 import Check from 'lucide-react/dist/esm/icons/check';
 import FileWarning from 'lucide-react/dist/esm/icons/file-warning';
+import Link2 from 'lucide-react/dist/esm/icons/link-2';
+import ChevronLeft from 'lucide-react/dist/esm/icons/chevron-left';
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right';
+import AlertTriangle from 'lucide-react/dist/esm/icons/alert-triangle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { listMedia, deleteMedia, uploadMedia, sizeWarning, warnForFile, fmtBytes, fmtDate, MediaItem } from '@/lib/mediaHelpers';
+import {
+    listMedia, deleteMedia, uploadMedia, fetchUsage,
+    sizeWarning, warnForFile, fmtBytes, fmtDate,
+    MediaItem, UsageMap,
+} from '@/lib/mediaHelpers';
 
 type Filter = 'all' | 'image' | 'video';
+const PAGE_SIZE = 48;
 
 export interface MediaLibraryProps {
-    /** Si presente, cada card tiene un botón "Elegir" que llama a este callback. */
     onSelect?: (item: MediaItem) => void;
-    /** Filtro forzado por tipo (útil en picker). */
     lockType?: 'image' | 'video';
 }
 
 export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }) => {
     const [items, setItems] = useState<MediaItem[]>([]);
+    const [total, setTotal] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+    const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<Filter>(lockType || 'all');
     const [q, setQ] = useState('');
@@ -33,24 +44,39 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
     const [pending, setPending] = useState<File | null>(null);
     const [copiedName, setCopiedName] = useState<string | null>(null);
     const [preview, setPreview] = useState<MediaItem | null>(null);
+    const [toDelete, setToDelete] = useState<MediaItem | null>(null);
+    const [usage, setUsage] = useState<UsageMap>({});
 
     const refresh = useCallback(async () => {
         setLoading(true);
         try {
-            const list = await listMedia();
-            setItems(list);
+            const [pageData, usageData] = await Promise.all([
+                listMedia({ page, pageSize: PAGE_SIZE, type: lockType || filter, q }),
+                fetchUsage(),
+            ]);
+            setItems(pageData.items);
+            setTotal(pageData.total);
+            setTotalPages(pageData.totalPages);
+            setUsage(usageData);
         } catch (e: any) {
             toast.error('No se pudo cargar la biblioteca', { description: e.message });
         } finally { setLoading(false); }
-    }, []);
+    }, [page, filter, q, lockType]);
 
     useEffect(() => { refresh(); }, [refresh]);
+
+    // Debounce búsqueda
+    useEffect(() => {
+        const t = setTimeout(() => { if (page !== 1) setPage(1); }, 300);
+        return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [q, filter]);
 
     const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
         const f = e.target.files?.[0];
         if (!f) return;
         setPending(f);
-        e.target.value = ''; // reset so same file re-triggers if user vuelve a elegir
+        e.target.value = '';
     };
 
     const confirmUpload = async () => {
@@ -60,18 +86,22 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
             const item = await uploadMedia(pending);
             toast.success('Archivo subido', { description: item.filename });
             setPending(null);
+            setPage(1);
             await refresh();
         } catch (e: any) {
             toast.error('Falló el upload', { description: e.message });
         } finally { setUploading(false); }
     };
 
-    const handleDelete = async (item: MediaItem) => {
-        if (!confirm(`¿Eliminar ${item.filename}? Esta acción es permanente.`)) return;
+    const executeDelete = async () => {
+        if (!toDelete) return;
+        const it = toDelete;
+        setToDelete(null);
         try {
-            await deleteMedia(item.filename);
-            toast.success('Eliminado', { description: item.filename });
-            setItems((prev) => prev.filter((x) => x.filename !== item.filename));
+            await deleteMedia(it.filename);
+            toast.success('Eliminado', { description: it.filename });
+            setItems((prev) => prev.filter((x) => x.filename !== it.filename));
+            setUsage((prev) => { const next = { ...prev }; delete next[it.url]; return next; });
         } catch (e: any) {
             toast.error('No se pudo eliminar', { description: e.message });
         }
@@ -83,41 +113,29 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
             await navigator.clipboard.writeText(full);
             setCopiedName(item.filename);
             setTimeout(() => setCopiedName((c) => (c === item.filename ? null : c)), 1500);
-        } catch {
-            toast.error('No se pudo copiar');
-        }
+        } catch { toast.error('No se pudo copiar'); }
     };
 
-    const displayed = items.filter((it) => {
-        if (lockType && it.type !== lockType) return false;
-        if (filter !== 'all' && it.type !== filter) return false;
-        if (q && !it.filename.toLowerCase().includes(q.toLowerCase())) return false;
-        return true;
-    });
-
-    const totalMB = items.reduce((a, x) => a + x.size, 0) / 1024 / 1024;
-    const imgs = items.filter(i => i.type === 'image').length;
-    const vids = items.filter(i => i.type === 'video').length;
+    const stats = {
+        imgs: 0, vids: 0, mb: 0,
+    };
+    items.forEach(i => { if (i.type === 'image') stats.imgs++; if (i.type === 'video') stats.vids++; stats.mb += i.size / 1024 / 1024; });
 
     return (
         <div className="w-full h-full flex flex-col min-h-0">
             {/* Top toolbar */}
             <div className="flex items-center gap-2 flex-wrap p-3 border-b bg-muted/30">
-                <label className="inline-flex">
+                <label className="inline-flex relative">
                     <Button variant="default" size="sm" className="gap-1.5 pointer-events-none">
                         <Upload className="size-3.5" /> Subir archivo
                     </Button>
-                    <input type="file" accept="image/*,video/*" onChange={onPickFile} className="absolute w-px h-px opacity-0" />
+                    <input type="file" accept="image/*,video/*" onChange={onPickFile} className="absolute inset-0 opacity-0 cursor-pointer" />
                 </label>
 
                 {!lockType && (
                     <div className="flex items-center gap-1 bg-background border rounded-md p-0.5 h-8">
                         {(['all', 'image', 'video'] as Filter[]).map((f) => (
-                            <button
-                                key={f}
-                                onClick={() => setFilter(f)}
-                                className={'px-2.5 h-7 rounded text-[11px] font-bold uppercase tracking-wider ' + (filter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
-                            >
+                            <button key={f} onClick={() => setFilter(f)} className={'px-2.5 h-7 rounded text-[11px] font-bold uppercase tracking-wider ' + (filter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
                                 {f === 'all' ? 'Todo' : f === 'image' ? 'Imágenes' : 'Videos'}
                             </button>
                         ))}
@@ -130,11 +148,11 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
                 </div>
 
                 <div className="ml-auto text-[10px] text-muted-foreground font-mono">
-                    {imgs} img · {vids} vid · {totalMB.toFixed(0)} MB
+                    {total} archivos · página {page}/{totalPages}
                 </div>
             </div>
 
-            {/* Pending file (warning + confirm) */}
+            {/* Pending upload */}
             <AnimatePresence>
                 {pending && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-b overflow-hidden">
@@ -149,20 +167,21 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                         {Array.from({ length: 12 }).map((_, i) => (<div key={i} className="aspect-video bg-muted animate-pulse rounded-md" />))}
                     </div>
-                ) : displayed.length === 0 ? (
+                ) : items.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                         <ImageIcon className="size-8 mx-auto mb-2 opacity-40" />
                         <div className="text-[13px]">Sin archivos {q ? 'que coincidan' : 'todavía'}.</div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                        {displayed.map((item) => (
+                        {items.map((item) => (
                             <MediaCard
                                 key={item.filename}
                                 item={item}
+                                usage={usage[item.url] || []}
                                 onSelect={onSelect}
                                 onPreview={setPreview}
-                                onDelete={handleDelete}
+                                onDelete={setToDelete}
                                 onCopy={handleCopy}
                                 copied={copiedName === item.filename}
                             />
@@ -171,60 +190,81 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
                 )}
             </div>
 
-            {/* Preview fullscreen modal */}
-            {preview && <PreviewModal item={preview} onClose={() => setPreview(null)} onCopy={handleCopy} copied={copiedName === preview.filename} onDelete={(it) => { handleDelete(it); setPreview(null); }} />}
+            {/* Pagination bar */}
+            {totalPages > 1 && (
+                <div className="border-t p-2 flex items-center justify-center gap-2 bg-muted/20">
+                    <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1 || loading} className="gap-1"><ChevronLeft className="size-3.5" /> Anterior</Button>
+                    <div className="flex items-center gap-1 text-[12px]">
+                        {getPageNumbers(page, totalPages).map((n, i) => n === '…' ? (
+                            <span key={i} className="px-2 text-muted-foreground">…</span>
+                        ) : (
+                            <button key={i} onClick={() => setPage(Number(n))} disabled={loading} className={'size-7 rounded text-[11px] font-bold ' + (n === page ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>{n}</button>
+                        ))}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages || loading} className="gap-1">Siguiente <ChevronRight className="size-3.5" /></Button>
+                </div>
+            )}
+
+            {/* Preview modal */}
+            {preview && <PreviewModal item={preview} usage={usage[preview.url] || []} onClose={() => setPreview(null)} onCopy={handleCopy} copied={copiedName === preview.filename} onDelete={(it) => { setPreview(null); setToDelete(it); }} />}
+
+            {/* Delete confirmation modal */}
+            <AlertDialog open={!!toDelete} onOpenChange={(o) => { if (!o) setToDelete(null); }}>
+                <AlertDialogContent className="max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="size-5 text-amber-500" />
+                            ¿Eliminar este archivo?
+                        </AlertDialogTitle>
+                        <div className="text-[13px] text-muted-foreground">
+                            <div>
+                                {toDelete && (
+                                    <div className="space-y-3 mt-2">
+                                        <div className="flex gap-3 items-center p-2 rounded border bg-muted/40">
+                                            {toDelete.type === 'image' ? (
+                                                <img src={toDelete.url} alt="" className="size-16 rounded object-cover shrink-0" />
+                                            ) : (
+                                                <div className="size-16 rounded bg-black/70 grid place-items-center shrink-0"><Video className="size-6 text-white/80" /></div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-[13px] font-mono truncate">{toDelete.filename}</div>
+                                                <div className="text-[11px] text-muted-foreground">{fmtBytes(toDelete.size)}</div>
+                                            </div>
+                                        </div>
+                                        {(usage[toDelete.url] || []).length > 0 ? (
+                                            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-[12px]">
+                                                <div className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mb-1"><Link2 className="size-3.5" /> Está en uso en {usage[toDelete.url].length} interface{usage[toDelete.url].length > 1 ? 's' : ''}</div>
+                                                <ul className="text-[11px] text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto pl-4 list-disc">
+                                                    {usage[toDelete.url].map((l) => <li key={l._id}>{l.name}</li>)}
+                                                </ul>
+                                                <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">Al borrarlo, esas interfaces mostrarán espacios en blanco donde aparecía.</div>
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2.5 text-[12px] text-emerald-700 dark:text-emerald-400">
+                                                ✓ No está asociado a ninguna interface. Se puede borrar sin romper nada.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={executeDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Borrar de todas formas</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };
 
-const PreviewModal: React.FC<{ item: MediaItem; onClose: () => void; onCopy: (i: MediaItem) => void; copied: boolean; onDelete: (i: MediaItem) => void }> = ({ item, onClose, onCopy, copied, onDelete }) => {
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
-    const warn = sizeWarning(item.size, item.type === 'video' ? 'video' : 'image');
-    return (
-        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex flex-col" onClick={onClose}>
-            {/* Header */}
-            <div className="flex items-center gap-3 p-4 border-b border-white/10 text-white" onClick={(e) => e.stopPropagation()}>
-                <div className="min-w-0 flex-1">
-                    <div className="text-[14px] font-semibold font-mono truncate">{item.filename}</div>
-                    <div className="text-[11px] text-white/60 flex items-center gap-2 flex-wrap mt-0.5">
-                        <span className="uppercase font-bold tracking-widest">{item.type}</span>
-                        <span>·</span>
-                        <span>{fmtBytes(item.size)}</span>
-                        {item.width && item.height && (<><span>·</span><span>{item.width}×{item.height}</span></>)}
-                        <span>·</span>
-                        <span>{fmtDate(item.mtime)}</span>
-                        <span className={"font-bold uppercase tracking-widest ml-2 " + warn.color}>{warn.label}</span>
-                    </div>
-                    <div className="text-[10px] text-white/40 mt-1">{warn.hint}</div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                    <Button variant="secondary" size="sm" onClick={() => onCopy(item)} className="gap-1.5">
-                        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                        {copied ? 'Copiado' : 'Copiar URL'}
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => onDelete(item)} className="gap-1.5">
-                        <Trash2 className="size-3.5" /> Borrar
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10">ESC</Button>
-                </div>
-            </div>
-            {/* Media */}
-            <div className="flex-1 min-h-0 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
-                {item.type === 'image' ? (
-                    <img src={item.url} alt={item.filename} className="max-w-full max-h-full object-contain rounded shadow-2xl" />
-                ) : item.type === 'video' ? (
-                    <video src={item.url} controls autoPlay className="max-w-full max-h-full object-contain rounded shadow-2xl" />
-                ) : (
-                    <div className="text-white/60 text-[13px]">Tipo no reproducible</div>
-                )}
-            </div>
-        </div>
-    );
-};
+function getPageNumbers(current: number, total: number): (number | '…')[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (current <= 4) return [1, 2, 3, 4, 5, '…', total];
+    if (current >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total];
+    return [1, '…', current - 1, current, current + 1, '…', total];
+}
 
 const PendingUploadCard: React.FC<{ file: File; uploading: boolean; onCancel: () => void; onConfirm: () => void }> = ({ file, uploading, onCancel, onConfirm }) => {
     const warn = warnForFile(file);
@@ -253,34 +293,39 @@ const PendingUploadCard: React.FC<{ file: File; uploading: boolean; onCancel: ()
     );
 };
 
-const MediaCard: React.FC<{ item: MediaItem; onSelect?: (i: MediaItem) => void; onPreview?: (i: MediaItem) => void; onDelete: (i: MediaItem) => void; onCopy: (i: MediaItem) => void; copied: boolean }> = ({ item, onSelect, onPreview, onDelete, onCopy, copied }) => {
+const MediaCard: React.FC<{
+    item: MediaItem;
+    usage: Array<{ _id: string; name: string }>;
+    onSelect?: (i: MediaItem) => void;
+    onPreview?: (i: MediaItem) => void;
+    onDelete: (i: MediaItem) => void;
+    onCopy: (i: MediaItem) => void;
+    copied: boolean;
+}> = ({ item, usage, onSelect, onPreview, onDelete, onCopy, copied }) => {
     const warn = sizeWarning(item.size, item.type === 'video' ? 'video' : 'image');
     return (
         <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="rounded-md border bg-card overflow-hidden group flex flex-col">
-            {/* Preview — click para abrir fullscreen */}
-            <div className="aspect-video bg-black/60 relative overflow-hidden cursor-pointer group/preview" onClick={() => onPreview && !onSelect && onPreview(item)}>
+            {/* Preview */}
+            <div className="aspect-video bg-black/60 relative overflow-hidden cursor-pointer" onClick={() => onPreview && !onSelect && onPreview(item)}>
                 {item.type === 'image' ? (
-                    <img src={item.url} alt={item.filename} loading="lazy" className="w-full h-full object-cover" />
+                    <img src={item.url} alt={item.filename} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                 ) : item.type === 'video' ? (
                     <>
-                        <video src={item.url} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                        <div className="absolute inset-0 bg-black/30 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Poster liviano: solo el primer frame via metadata (barato). Sin autoplay ni preload agresivo. */}
+                        <video src={item.url} className="w-full h-full object-cover" muted playsInline preload="none" />
+                        <div className="absolute inset-0 bg-black/40 grid place-items-center">
                             <Video className="size-8 text-white/90 drop-shadow-lg" />
                         </div>
                     </>
                 ) : (
                     <div className="w-full h-full grid place-items-center text-muted-foreground text-[10px]">otro</div>
                 )}
-                {/* Warning badge */}
                 {(warn.level === 'warn' || warn.level === 'bad') && (
                     <div className={"absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest " + (warn.level === 'bad' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white')}>
                         {warn.label}
                     </div>
                 )}
-                {/* Type badge */}
-                <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-black/70 text-white">
-                    {item.type}
-                </div>
+                <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-black/70 text-white">{item.type}</div>
             </div>
 
             {/* Info */}
@@ -291,6 +336,15 @@ const MediaCard: React.FC<{ item: MediaItem; onSelect?: (i: MediaItem) => void; 
                     {item.width && item.height && (<><span>·</span><span>{item.width}×{item.height}</span></>)}
                     <span>·</span><span>{fmtDate(item.mtime)}</span>
                 </div>
+                {/* Usage badge */}
+                {usage.length > 0 ? (
+                    <div className="text-[10px] flex items-center gap-1 mt-0.5 text-primary" title={usage.map(l => l.name).join(', ')}>
+                        <Link2 className="size-3" />
+                        <span className="truncate">Usado en {usage.length} interface{usage.length > 1 ? 's' : ''}</span>
+                    </div>
+                ) : (
+                    <div className="text-[10px] text-muted-foreground mt-0.5 opacity-70">Sin usar</div>
+                )}
             </div>
 
             {/* Actions */}
@@ -308,6 +362,66 @@ const MediaCard: React.FC<{ item: MediaItem; onSelect?: (i: MediaItem) => void; 
                 </Button>
             </div>
         </motion.div>
+    );
+};
+
+const PreviewModal: React.FC<{
+    item: MediaItem;
+    usage: Array<{ _id: string; name: string }>;
+    onClose: () => void;
+    onCopy: (i: MediaItem) => void;
+    copied: boolean;
+    onDelete: (i: MediaItem) => void;
+}> = ({ item, usage, onClose, onCopy, copied, onDelete }) => {
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+    const warn = sizeWarning(item.size, item.type === 'video' ? 'video' : 'image');
+    return (
+        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex flex-col" onClick={onClose}>
+            <div className="flex items-center gap-3 p-4 border-b border-white/10 text-white" onClick={(e) => e.stopPropagation()}>
+                <div className="min-w-0 flex-1">
+                    <div className="text-[14px] font-semibold font-mono truncate">{item.filename}</div>
+                    <div className="text-[11px] text-white/60 flex items-center gap-2 flex-wrap mt-0.5">
+                        <span className="uppercase font-bold tracking-widest">{item.type}</span>
+                        <span>·</span>
+                        <span>{fmtBytes(item.size)}</span>
+                        {item.width && item.height && (<><span>·</span><span>{item.width}×{item.height}</span></>)}
+                        <span>·</span>
+                        <span>{fmtDate(item.mtime)}</span>
+                        <span className={"font-bold uppercase tracking-widest ml-2 " + warn.color}>{warn.label}</span>
+                    </div>
+                    <div className="text-[10px] text-white/40 mt-1">{warn.hint}</div>
+                    {usage.length > 0 && (
+                        <div className="text-[11px] text-primary mt-1.5 flex items-center gap-1.5">
+                            <Link2 className="size-3.5" />
+                            Usado en: <span className="text-white/80 truncate">{usage.map(l => l.name).join(' · ')}</span>
+                        </div>
+                    )}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <Button variant="secondary" size="sm" onClick={() => onCopy(item)} className="gap-1.5">
+                        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                        {copied ? 'Copiado' : 'Copiar URL'}
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => onDelete(item)} className="gap-1.5">
+                        <Trash2 className="size-3.5" /> Borrar
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10">ESC</Button>
+                </div>
+            </div>
+            <div className="flex-1 min-h-0 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+                {item.type === 'image' ? (
+                    <img src={item.url} alt={item.filename} className="max-w-full max-h-full object-contain rounded shadow-2xl" />
+                ) : item.type === 'video' ? (
+                    <video src={item.url} controls autoPlay className="max-w-full max-h-full object-contain rounded shadow-2xl" />
+                ) : (
+                    <div className="text-white/60 text-[13px]">Tipo no reproducible</div>
+                )}
+            </div>
+        </div>
     );
 };
 
