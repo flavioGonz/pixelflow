@@ -687,7 +687,67 @@ nextApp.prepare().then(() => {
         }
     });
 
-    // GET /api/screens/list → lista pública de pantallas registradas (para app WebOS y otros)
+    // ===== OFFLINE-FIRST SYNC (Solución C) =====
+    // GET /api/sync/manifest → todo lo que un player necesita para operar offline
+    expressApp.get('/api/sync/manifest', async (req, res) => {
+        try {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            const layouts = await Layout.find().lean();
+            const screensaverDoc = await Settings.findOne({ key: 'global' });
+            const mediaSet = new Set();
+            const pushUrl = (u) => {
+                if (!u || typeof u !== 'string') return;
+                const idx = u.indexOf('/uploads/');
+                if (idx < 0) return;
+                mediaSet.add(u.substring(idx));
+            };
+            for (const l of layouts) {
+                pushUrl(l.backgroundImage);
+                pushUrl(l.backgroundVideo);
+                for (const w of (l.widgets || [])) {
+                    const d = w.data || {};
+                    pushUrl(d.url); pushUrl(d.imageUrl); pushUrl(d.videoUrl); pushUrl(d.src); pushUrl(d.poster);
+                    if (Array.isArray(d.images)) d.images.forEach(pushUrl);
+                    if (Array.isArray(d.items)) d.items.forEach(it => { pushUrl(it?.imageUrl); pushUrl(it?.iconUrl); pushUrl(it?.url); });
+                    if (Array.isArray(d.products)) d.products.forEach(p => { pushUrl(p?.imageUrl); pushUrl(p?.photoUrl); });
+                }
+            }
+            const ss = screensaverDoc?.screensaver || {};
+            (ss.mediaItems || []).forEach(m => pushUrl(m?.url));
+            res.json({
+                version: 1,
+                serverTime: Date.now(),
+                layouts,
+                mediaUrls: Array.from(mediaSet).sort(),
+                settings: { screensaver: ss },
+            });
+        } catch (e) {
+            console.error('[/api/sync/manifest]', e);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    // GET /api/sync/since?ts=1234567890 → layouts modificados después de ts (delta)
+    expressApp.get('/api/sync/since', async (req, res) => {
+        try {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            const ts = parseInt(req.query.ts) || 0;
+            const cutoff = new Date(ts);
+            const changed = await Layout.find({ updatedAt: { $gt: cutoff } }).lean();
+            const screensaverDoc = await Settings.findOne({ key: 'global' });
+            const ss = screensaverDoc?.screensaver || {};
+            const settingsChanged = screensaverDoc?.updatedAt && new Date(screensaverDoc.updatedAt).getTime() > ts;
+            res.json({
+                serverTime: Date.now(),
+                layouts: changed,
+                settings: settingsChanged ? { screensaver: ss } : null,
+            });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+        // GET /api/screens/list → lista pública de pantallas registradas (para app WebOS y otros)
     expressApp.get('/api/screens/list', async (req, res) => {
         try {
             const screens = await Screen.find({}, {
@@ -960,6 +1020,8 @@ nextApp.prepare().then(() => {
                     // Also emit the layouts_list so admin sees the new updatedAt/preview
                     const layouts = await Layout.find().sort({ updatedAt: -1 });
                     io.emit('layouts_list', layouts);
+                    // C1: broadcast delta para sync IDB en players
+                    io.emit('layout_delta', { type: 'updated', layout: savedLayout, serverTime: Date.now() });
                 }
 
                 // Refresh screens_list so admin's screens page reflects lastLayoutId changes

@@ -9,6 +9,8 @@ import { useWindowSize } from '@/hooks/useWindowSize';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { registerServiceWorker, prefetchAllLayouts } from '@/lib/offlineSync';
+import { bootstrapSync, applyDelta } from '@/lib/syncEngine';
+import { SyncSplash } from '@/components/player/SyncSplash';
 import WidgetRenderer from '@/components/shared/WidgetRenderer';
 
 // Layout-level transitions when changing interface. Chosen via layout.transition or master's transition.
@@ -69,6 +71,7 @@ export default function PlayerPage() {
     const orientation = useScreenOrientation();
     const { width, height } = useWindowSize();
     const { layout, setLayout, setConnected, isConnected, setScreenId, isAuthorized, setAuthorized, pushToHistory, navDirection, setNavDirection } = usePlayerStore();
+    const [bootstrapping, setBootstrapping] = useState<boolean>(true);
 
     // iOS-style edge swipe from left → BACK (goes to previous layout in history)
     useEdgeSwipeBack({
@@ -263,14 +266,10 @@ export default function PlayerPage() {
 
         // Fase B: registrar Service Worker + prefetch de todos los layouts
         if (typeof window !== 'undefined') {
-            registerServiceWorker().then((reg) => {
-                if (reg) {
-                    // Prefetch en background, sin bloquear al player
-                    setTimeout(() => { prefetchAllLayouts().catch(() => {}); }, 3000);
-                    // Re-prefetch cada 10 min para capturar layouts nuevos
-                    const pfId = setInterval(() => { prefetchAllLayouts().catch(() => {}); }, 10 * 60 * 1000);
-                    (window as any).__pfPrefetchId = pfId;
-                }
+            registerServiceWorker().then(async () => {
+                try { await bootstrapSync({ force: false }); }
+                catch (e) { console.warn('[bootstrap] fallo, seguimos online:', e); }
+                setBootstrapping(false);
             });
         }
 
@@ -338,6 +337,11 @@ export default function PlayerPage() {
         socket.on('disconnect', (reason) => {
             console.log('Socket Disconnected:', reason);
             setConnected(false);
+        });
+
+        socket.on('layout_delta', (msg: any) => {
+            try { if (msg?.type === 'updated' && msg.layout) applyDelta(msg.layout); }
+            catch (e) { console.warn('layout_delta apply err:', e); }
         });
 
         socket.on('update_layout', (newLayout) => {
@@ -477,7 +481,6 @@ export default function PlayerPage() {
         return () => {
             if (typeof window !== 'undefined') window.removeEventListener('pf-nav', onNav);
             clearInterval(heartbeatId);
-            if ((window as any).__pfPrefetchId) clearInterval((window as any).__pfPrefetchId);
             document.removeEventListener('visibilitychange', onVisibility);
             window.removeEventListener('online', onOnline);
             if (wakeLock) { try { wakeLock.release(); } catch {} }
@@ -539,6 +542,8 @@ export default function PlayerPage() {
                 WebkitTouchCallout: 'none',
             } as React.CSSProperties}
         >
+            <SyncSplash visible={bootstrapping && !layout} />
+
             {/* Minimalist Connection Indicator */}
             <div className="fixed top-6 right-6 z-[500] pointer-events-none">
                 <div className="relative">
