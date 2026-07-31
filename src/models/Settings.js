@@ -21,6 +21,7 @@ const BottomNavSchema = new mongoose.Schema({
     accentColor: { type: String, default: '#0ea5e9' },
     theme: { type: String, enum: ['glass', 'solid-dark', 'solid-light'], default: 'glass' },
     items: [BottomNavItemSchema],
+    iconLibrary: [{ type: String }],
 }, { _id: false });
 
 const ScreensaverSchema = new mongoose.Schema({

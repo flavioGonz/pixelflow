@@ -64,7 +64,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, p
         ? 'bg-black/90 text-white border-white/10'
         : theme === 'solid-light'
             ? 'bg-white/95 text-slate-900 border-black/10'
-            : 'bg-black/55 text-white backdrop-blur-2xl backdrop-saturate-150 border-white/25';
+            : 'bg-white/70 text-slate-900 backdrop-blur-2xl backdrop-saturate-150 border-white/60 shadow-slate-900/20';
 
     const enterSubmenu = (item: BottomNavItem) => {
         if (!item.children || item.children.length === 0) return;
@@ -117,7 +117,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, p
                 className={
                     'relative flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors shrink-0 ' +
                     (showLabels ? 'min-w-[70px] px-3 py-2' : 'size-14') +
-                    (isActive ? ' bg-white/20' : ' hover:bg-white/10 active:bg-white/20')
+                    (isActive ? ' bg-slate-900/15' : ' hover:bg-slate-900/10 active:bg-slate-900/20')
                 }
                 style={{ scrollSnapAlign: 'center', color: itemColor }}
             >
@@ -127,7 +127,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, p
                     <Icon className={showLabels ? 'size-6' : 'size-7'} />
                 ) : null}
                 {showLabels && item.label && (
-                    <span className={'text-[10px] font-bold uppercase tracking-wider truncate max-w-[90px] ' + (theme === 'solid-light' ? '' : 'text-white/95')}>
+                    <span className={'text-[10px] font-bold uppercase tracking-wider truncate max-w-[90px] ' + (theme === 'glass' || theme === 'solid-light' ? '' : 'text-white/95')}>
                         {item.label}
                     </span>
                 )}
@@ -170,7 +170,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, p
                         >
                             <ChevronLeftIcon />
                             {showLabels && (
-                                <span className={'text-[9px] font-bold uppercase tracking-widest ' + (theme === 'solid-light' ? '' : 'text-white/70')}>Atrás</span>
+                                <span className={'text-[9px] font-bold uppercase tracking-widest ' + (theme === 'glass' || theme === 'solid-light' ? '' : 'text-white/70')}>Atrás</span>
                             )}
                         </motion.button>
                     )}

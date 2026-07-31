@@ -17,19 +17,35 @@ import ArrowDown from 'lucide-react/dist/esm/icons/arrow-down';
 import Menu from 'lucide-react/dist/esm/icons/menu';
 import { BottomNav, BottomNavConfig, BottomNavItem } from '@/components/player/BottomNav';
 
+async function saveToLibrary(url: string) {
+    try {
+        const r = await fetch('/api/settings/bottomnav');
+        const cfg = r.ok ? await r.json() : {};
+        const lib = Array.isArray(cfg.iconLibrary) ? cfg.iconLibrary : [];
+        if (!lib.includes(url)) {
+            await fetch('/api/settings/bottomnav', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...cfg, iconLibrary: [url, ...lib].slice(0, 24) }),
+            });
+        }
+    } catch {}
+}
+
 const uploadIcon = async (file: File): Promise<string | null> => {
     const fd = new FormData(); fd.append('image', file);
     try {
         const r = await fetch('/api/upload', { method: 'POST', body: fd });
         if (!r.ok) return null;
         const d = await r.json();
+        if (d.url) saveToLibrary(d.url);
         return d.url || null;
     } catch { return null; }
 };
 
 const strval = (v: any, def = ''): string => (typeof v === 'string' && v ? v : def);
 
-const ICON_CHOICES = ['Home', 'Menu', 'Utensils', 'BedDouble', 'Waves', 'Coffee', 'ShoppingBag', 'MapPin', 'Info', 'Calendar', 'Phone', 'Wifi', 'Star', 'Heart', 'ArrowLeft', 'Music', 'Camera', 'Users', 'ChefHat', 'Trees', 'Sun', 'Umbrella', 'Sparkles', 'Gift'];
+const ICON_CHOICES = ['Home', 'Menu', 'Utensils', 'BedDouble', 'Waves', 'Coffee', 'MapPin', 'Info', 'Calendar', 'Phone', 'Wifi', 'Star', 'Heart', 'ArrowLeft', 'Music', 'Camera', 'Users', 'ChefHat', 'Trees', 'Sun', 'Umbrella', 'Sparkles', 'Gift', 'ShoppingBag'];
 
 export default function BottomNavPage() {
     const [config, setConfig] = useState<BottomNavConfig>({ enabled: false, showLabels: true, accentColor: '#0ea5e9', theme: 'glass', items: [] });
@@ -204,6 +220,7 @@ export default function BottomNavPage() {
             </div>
             {iconPickerFor && (
                 <IconPickerModal
+                    library={Array.isArray((config as any).iconLibrary) ? (config as any).iconLibrary : []}
                     open={!!iconPickerFor}
                     onClose={() => setIconPickerFor(null)}
                     onPickPreset={(name) => {
@@ -345,7 +362,8 @@ const IconPickerModal: React.FC<{
     onClose: () => void;
     onPickPreset: (name: string) => void;
     onUpload: (file: File) => void;
-}> = ({ open, onClose, onPickPreset, onUpload }) => {
+    library?: string[];
+}> = ({ open, onClose, onPickPreset, onUpload, library = [] }) => {
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm grid place-items-center p-6" onClick={onClose}>
@@ -357,7 +375,25 @@ const IconPickerModal: React.FC<{
                     </div>
                     <Button variant="ghost" size="sm" onClick={onClose}>Cerrar</Button>
                 </div>
-                <div className="grid grid-cols-6 md:grid-cols-8 gap-2 max-h-[50vh] overflow-y-auto">
+                {library.length > 0 && (
+                    <div className="space-y-1.5 pb-3 border-b">
+                        <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Tus íconos subidos ({library.length})</div>
+                        <div className="grid grid-cols-7 gap-2 overflow-x-auto pf-bottomnav-scroll" style={{gridAutoFlow: "column", gridAutoColumns: "minmax(72px, 1fr)", gridTemplateColumns: "unset"}}>
+                            {library.map((url, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => onPickPreset(url)}
+                                    className="aspect-square flex items-center justify-center rounded-lg border hover:border-primary hover:bg-accent transition-colors p-1.5 overflow-hidden"
+                                    title="Ícono subido"
+                                >
+                                    <img src={url} alt="" className="max-w-full max-h-full object-contain" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Íconos disponibles</div>
+                <div className="grid grid-cols-7 gap-2 overflow-x-auto pf-bottomnav-scroll" style={{gridAutoFlow: "column", gridAutoColumns: "minmax(72px, 1fr)", gridTemplateColumns: "unset"}}>
                     {ICON_CHOICES.map((name) => {
                         const IC: any = (Icons as any)[name] || Icons.Circle;
                         return (
