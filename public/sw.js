@@ -11,7 +11,7 @@
  *   resto                     → network-first
  */
 
-const VERSION = "v6";
+const VERSION = "v7";
 const CACHE_STATIC = 'pf-static-' + VERSION;
 const CACHE_MEDIA  = 'pf-media-' + VERSION;
 const CACHE_API    = 'pf-api-' + VERSION;
