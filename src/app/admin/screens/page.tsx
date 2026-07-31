@@ -448,7 +448,9 @@ export default function ScreensPage() {
                                                         )}
                                                         <DropdownMenu>
                                                             <DropdownMenuTrigger
-                                                                render={<Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" title="Comandos remotos" />}
+                                                                className="inline-flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                                title="Comandos remotos"
+                                                                aria-label="Comandos remotos"
                                                             >
                                                                 <Zap className="size-4" />
                                                             </DropdownMenuTrigger>
