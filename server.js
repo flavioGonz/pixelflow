@@ -882,7 +882,7 @@ nextApp.prepare().then(() => {
     });
 
     // Next.js handler (must go after ALL expressApp routes)
-    // Fix chunk 404 zombie: si un chunk _next/static no existe,
+        // Fix chunk 404 zombie: si un chunk _next/static no existe,
     // devolver JS con reload en vez de 404 → rompe el loop de NPM cacheando 404s.
     expressApp.use('/_next/static', (req, res, next) => {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -902,9 +902,9 @@ nextApp.prepare().then(() => {
                  "if (typeof window !== 'undefined') { window.location.reload(); }\n");
     });
 
-        // Rewrite HTML output: agregar ?v=BUILD_ID a URLs de chunks _next/static
-    // Esto FUERZA a NPM/OpenResty a re-consultar chunks porque nunca ha visto esas URLs.
-    // Rompe el problema de "chunk 404 zombie" cacheado por el proxy después de un rebuild. [chunk-cachebust]
+        // [pfa-alias] Servir todos los assets _next/static bajo un path alias /pfa-BUILDID/
+    // que NPM/OpenResty nunca vio → el proxy pasa al origen → sirve 200.
+    // Con cada rebuild el BUILD_ID cambia → alias nuevo → cache stale del proxy queda irrelevante.
     (function () {
         const _fs = require('fs');
         const _path = require('path');
@@ -913,16 +913,31 @@ nextApp.prepare().then(() => {
             const bp = _path.join(__dirname, '.next', 'BUILD_ID');
             if (_fs.existsSync(bp)) _buildId = _fs.readFileSync(bp, 'utf8').trim();
         } catch {}
+        const ALIAS = '/pfa-' + _buildId;
+        console.log('[pfa-alias] serving _next/static under', ALIAS);
+
+        // 1) Alias physical serving: /pfa-BUILDID/* → .next/static/*
+        expressApp.use(ALIAS, express.static(_path.join(__dirname, '.next', 'static'), {
+            immutable: true,
+            maxAge: '365d',
+            setHeaders: (res) => res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'),
+        }));
+
+        // 2) HTML rewrite: reemplazar /_next/static/ por /pfa-BUILDID/ en respuestas HTML
         expressApp.use((req, res, next) => {
             // Solo interceptar respuestas HTML (páginas del app router)
             const accept = req.headers.accept || '';
             if (!accept.includes('text/html')) return next();
+            // html-nostore: forzar que browsers y proxies NO cacheen HTML → siempre pedimos el HTML actual con chunks nuevos
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
             const origSend = res.send.bind(res);
             const origEnd = res.end.bind(res);
             const rewrite = (body) => {
                 if (typeof body !== 'string') return body;
                 // Agregar ?v=BUILD_ID a src/href de chunks _next/static
-                return body.replace(/(\/_next\/static\/[^"'?]+)/g, (m) => m + '?v=' + _buildId);
+                return body.replace(/\/_next\/static\//g, ALIAS + '/');
             };
             res.send = function (body) {
                 try { body = rewrite(body); } catch {}
