@@ -30,7 +30,7 @@ const swaggerUi = require('swagger-ui-express');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-const dev = process.env.NODE_ENV !== 'production';
+const dev = false; // Hardcoded prod: evita bug donde dotenv carga tarde y Next arranca en dev
 const nextApp = next({ dev });
 const handle = nextApp.getRequestHandler();
 

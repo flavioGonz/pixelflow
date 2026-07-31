@@ -32,6 +32,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
     const [uploading, setUploading] = useState(false);
     const [pending, setPending] = useState<File | null>(null);
     const [copiedName, setCopiedName] = useState<string | null>(null);
+    const [preview, setPreview] = useState<MediaItem | null>(null);
 
     const refresh = useCallback(async () => {
         setLoading(true);
@@ -160,12 +161,65 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
                                 key={item.filename}
                                 item={item}
                                 onSelect={onSelect}
+                                onPreview={setPreview}
                                 onDelete={handleDelete}
                                 onCopy={handleCopy}
                                 copied={copiedName === item.filename}
                             />
                         ))}
                     </div>
+                )}
+            </div>
+
+            {/* Preview fullscreen modal */}
+            {preview && <PreviewModal item={preview} onClose={() => setPreview(null)} onCopy={handleCopy} copied={copiedName === preview.filename} onDelete={(it) => { handleDelete(it); setPreview(null); }} />}
+        </div>
+    );
+};
+
+const PreviewModal: React.FC<{ item: MediaItem; onClose: () => void; onCopy: (i: MediaItem) => void; copied: boolean; onDelete: (i: MediaItem) => void }> = ({ item, onClose, onCopy, copied, onDelete }) => {
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+    const warn = sizeWarning(item.size, item.type === 'video' ? 'video' : 'image');
+    return (
+        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex flex-col" onClick={onClose}>
+            {/* Header */}
+            <div className="flex items-center gap-3 p-4 border-b border-white/10 text-white" onClick={(e) => e.stopPropagation()}>
+                <div className="min-w-0 flex-1">
+                    <div className="text-[14px] font-semibold font-mono truncate">{item.filename}</div>
+                    <div className="text-[11px] text-white/60 flex items-center gap-2 flex-wrap mt-0.5">
+                        <span className="uppercase font-bold tracking-widest">{item.type}</span>
+                        <span>·</span>
+                        <span>{fmtBytes(item.size)}</span>
+                        {item.width && item.height && (<><span>·</span><span>{item.width}×{item.height}</span></>)}
+                        <span>·</span>
+                        <span>{fmtDate(item.mtime)}</span>
+                        <span className={"font-bold uppercase tracking-widest ml-2 " + warn.color}>{warn.label}</span>
+                    </div>
+                    <div className="text-[10px] text-white/40 mt-1">{warn.hint}</div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <Button variant="secondary" size="sm" onClick={() => onCopy(item)} className="gap-1.5">
+                        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                        {copied ? 'Copiado' : 'Copiar URL'}
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => onDelete(item)} className="gap-1.5">
+                        <Trash2 className="size-3.5" /> Borrar
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10">ESC</Button>
+                </div>
+            </div>
+            {/* Media */}
+            <div className="flex-1 min-h-0 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+                {item.type === 'image' ? (
+                    <img src={item.url} alt={item.filename} className="max-w-full max-h-full object-contain rounded shadow-2xl" />
+                ) : item.type === 'video' ? (
+                    <video src={item.url} controls autoPlay className="max-w-full max-h-full object-contain rounded shadow-2xl" />
+                ) : (
+                    <div className="text-white/60 text-[13px]">Tipo no reproducible</div>
                 )}
             </div>
         </div>
@@ -199,12 +253,12 @@ const PendingUploadCard: React.FC<{ file: File; uploading: boolean; onCancel: ()
     );
 };
 
-const MediaCard: React.FC<{ item: MediaItem; onSelect?: (i: MediaItem) => void; onDelete: (i: MediaItem) => void; onCopy: (i: MediaItem) => void; copied: boolean }> = ({ item, onSelect, onDelete, onCopy, copied }) => {
+const MediaCard: React.FC<{ item: MediaItem; onSelect?: (i: MediaItem) => void; onPreview?: (i: MediaItem) => void; onDelete: (i: MediaItem) => void; onCopy: (i: MediaItem) => void; copied: boolean }> = ({ item, onSelect, onPreview, onDelete, onCopy, copied }) => {
     const warn = sizeWarning(item.size, item.type === 'video' ? 'video' : 'image');
     return (
         <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="rounded-md border bg-card overflow-hidden group flex flex-col">
-            {/* Preview */}
-            <div className="aspect-video bg-black/60 relative overflow-hidden">
+            {/* Preview — click para abrir fullscreen */}
+            <div className="aspect-video bg-black/60 relative overflow-hidden cursor-pointer group/preview" onClick={() => onPreview && !onSelect && onPreview(item)}>
                 {item.type === 'image' ? (
                     <img src={item.url} alt={item.filename} loading="lazy" className="w-full h-full object-cover" />
                 ) : item.type === 'video' ? (
@@ -241,8 +295,10 @@ const MediaCard: React.FC<{ item: MediaItem; onSelect?: (i: MediaItem) => void; 
 
             {/* Actions */}
             <div className="border-t p-1.5 flex items-center gap-1">
-                {onSelect && (
+                {onSelect ? (
                     <Button size="sm" className="flex-1 h-7 text-[11px]" onClick={() => onSelect(item)}>Elegir</Button>
+                ) : (
+                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px]" onClick={() => onPreview && onPreview(item)}>👁 Ver</Button>
                 )}
                 <Button variant="ghost" size="icon" className="size-7" onClick={() => onCopy(item)} title="Copiar URL">
                     {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
