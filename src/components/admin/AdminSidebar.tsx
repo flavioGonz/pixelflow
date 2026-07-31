@@ -9,6 +9,7 @@ import ShoppingBag from 'lucide-react/dist/esm/icons/shopping-bag';
 import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw';
 import Calendar from 'lucide-react/dist/esm/icons/calendar';
 import Database from 'lucide-react/dist/esm/icons/database';
+import ImageIcon from 'lucide-react/dist/esm/icons/image';
 import Smartphone from 'lucide-react/dist/esm/icons/smartphone';
 import Network from 'lucide-react/dist/esm/icons/network';
 import Radio from 'lucide-react/dist/esm/icons/radio';
@@ -56,6 +57,7 @@ const sections: Section[] = [
         href: '/admin/layouts',
         items: [
             { icon: Database, label: 'Interfaces', href: '/admin/layouts', id: 'layouts' },
+            { icon: ImageIcon, label: 'Biblioteca', href: '/admin/media', id: 'media' },
             { icon: ShoppingBag, label: 'Productos', href: '/admin/products', id: 'products' },
             { icon: RefreshCw, label: 'Actividades', href: '/admin/activities', id: 'activities' },
             { icon: Radio, label: 'Sensores', href: '/admin/sensors', id: 'sensors' },

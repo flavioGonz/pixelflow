@@ -115,6 +115,7 @@ function AdminDashboard() {
     const [backgroundOverlayOpacity, setBackgroundOverlayOpacity] = useState(0.5);
     const [backgroundPattern, setBackgroundPattern] = useState<'none' | 'dots' | 'grid' | 'waves' | 'noise'>('none');
     const [backgroundPatternOpacity, setBackgroundPatternOpacity] = useState(0.2);
+    const [mediaPickerFor, setMediaPickerFor] = useState<null | 'bg-image' | 'bg-video'>(null);
     const [transitionType, setTransitionType] = useState<string>('dramatic');
     const [transitionDuration, setTransitionDuration] = useState<number>(0.7);
     const [editingLayoutId, setEditingLayoutId] = useState<string | null>(null);
@@ -2531,8 +2532,11 @@ function AdminDashboard() {
                                                                                     <div className="text-[9px] text-muted-foreground">JPG · PNG · WebP</div>
                                                                                 </div>
                                                                             </div>
-                                                                            <div className="mt-1.5">
-                                                                                <ImageUpload compact label="Elegir archivo" onUploadSuccess={(url) => { setBackgroundImage(url); setBackgroundVideo(''); }} />
+                                                                            <div className="mt-1.5 flex gap-1.5">
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <ImageUpload compact label="Subir nuevo" onUploadSuccess={(url) => { setBackgroundImage(url); setBackgroundVideo(''); }} />
+                                                                                </div>
+                                                                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMediaPickerFor('bg-image'); }} className="px-2 h-7 text-[10px] font-bold rounded-md border bg-background hover:border-primary/50 hover:text-primary transition-colors">📁 Biblioteca</button>
                                                                             </div>
                                                                         </div>
                                                                     </TooltipTrigger>
@@ -2549,8 +2553,11 @@ function AdminDashboard() {
                                                                                     <div className="text-[9px] text-muted-foreground">MP4 · WebM · MOV</div>
                                                                                 </div>
                                                                             </div>
-                                                                            <div className="mt-1.5">
-                                                                                <ImageUpload compact label="Elegir archivo" onUploadSuccess={(url) => { setBackgroundVideo(url); setBackgroundImage(''); }} />
+                                                                            <div className="mt-1.5 flex gap-1.5">
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <ImageUpload compact label="Subir nuevo" onUploadSuccess={(url) => { setBackgroundVideo(url); setBackgroundImage(''); }} />
+                                                                                </div>
+                                                                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMediaPickerFor('bg-video'); }} className="px-2 h-7 text-[10px] font-bold rounded-md border bg-background hover:border-primary/50 hover:text-primary transition-colors">📁 Biblioteca</button>
                                                                             </div>
                                                                         </div>
                                                                     </TooltipTrigger>
@@ -2907,6 +2914,19 @@ function AdminDashboard() {
                 }
             </AnimatePresence >
             <Toaster />
+
+            {/* Media Picker global (Tanda 2) */}
+            <MediaPicker
+                open={!!mediaPickerFor}
+                onClose={() => setMediaPickerFor(null)}
+                lockType={mediaPickerFor === 'bg-video' ? 'video' : mediaPickerFor === 'bg-image' ? 'image' : undefined}
+                onSelect={(item) => {
+                    if (mediaPickerFor === 'bg-image') { setBackgroundImage(item.url); setBackgroundVideo(''); }
+                    else if (mediaPickerFor === 'bg-video') { setBackgroundVideo(item.url); setBackgroundImage(''); }
+                    setMediaPickerFor(null);
+                }}
+            />
+
         </div >
     );
 }

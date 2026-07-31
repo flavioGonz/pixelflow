@@ -613,14 +613,78 @@ nextApp.prepare().then(() => {
         }
     });
 
-    expressApp.post('/api/upload', upload.single('image'), (req, res) => {
-        console.log('Upload request received');
-        if (!req.file) {
-            console.error('No file in request');
-            return res.status(400).json({ error: 'No file uploaded' });
+    expressApp.post('/api/upload', upload.single('image'), async (req, res) => {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        const filename = req.file.filename;
+        const url = `/uploads/${filename}`;
+        // Metadata para media library
+        let meta = { url, filename, size: req.file.size, mimeType: req.file.mimetype };
+        try {
+            if ((req.file.mimetype || '').startsWith('image/')) {
+                const sharp = require('sharp');
+                const im = await sharp(req.file.path).metadata();
+                meta.width  = im.width;
+                meta.height = im.height;
+            }
+        } catch (e) { /* silent */ }
+        res.json(meta);
+    });
+
+    // Tanda 2: Media Library
+    // GET /api/uploads  → lista con metadata
+    expressApp.get('/api/uploads', async (req, res) => {
+        try {
+            const fs = require('fs').promises;
+            const path = require('path');
+            const dir = uploadDir;
+            const files = await fs.readdir(dir);
+            const sharp = (() => { try { return require('sharp'); } catch { return null; } })();
+            const results = [];
+            for (const f of files) {
+                if (f.startsWith('.')) continue;
+                try {
+                    const st = await fs.stat(path.join(dir, f));
+                    if (!st.isFile()) continue;
+                    const ext = f.split('.').pop().toLowerCase();
+                    const isImage = ['jpg','jpeg','png','webp','gif','avif','svg'].includes(ext);
+                    const isVideo = ['mp4','webm','mov','ogg','ogv','mkv'].includes(ext);
+                    const item = {
+                        filename: f,
+                        url: `/uploads/${f}`,
+                        size: st.size,
+                        mtime: st.mtime.getTime(),
+                        type: isImage ? 'image' : (isVideo ? 'video' : 'other'),
+                    };
+                    if (isImage && sharp && st.size < 20 * 1024 * 1024) {
+                        try {
+                            const im = await sharp(path.join(dir, f)).metadata();
+                            item.width = im.width;
+                            item.height = im.height;
+                        } catch {}
+                    }
+                    results.push(item);
+                } catch {}
+            }
+            results.sort((a, b) => b.mtime - a.mtime);
+            res.json(results);
+        } catch (e) {
+            res.status(500).json({ error: e.message });
         }
-        console.log('File uploaded successfully:', req.file.filename);
-        res.json({ url: `/uploads/${req.file.filename}` });
+    });
+
+    // DELETE /api/uploads/:filename
+    expressApp.delete('/api/uploads/:filename', async (req, res) => {
+        try {
+            const fs = require('fs').promises;
+            const path = require('path');
+            const name = req.params.filename.replace(/[\\/]/g, '');
+            if (!name || name.startsWith('.')) return res.status(400).json({ error: 'invalid filename' });
+            const full = path.join(uploadDir, name);
+            await fs.unlink(full);
+            res.json({ ok: true, filename: name });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
     });
 
 
