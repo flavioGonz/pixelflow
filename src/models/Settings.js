@@ -6,6 +6,22 @@ const MediaItemSchema = new mongoose.Schema({
     durationMs: { type: Number, default: 8000 },
 }, { _id: false });
 
+const BottomNavItemSchema = new mongoose.Schema({
+    icon: { type: String, default: 'Home' },
+    label: { type: String, default: '' },
+    action: { type: String, enum: ['GO_TO', 'BACK', 'HOME'], default: 'GO_TO' },
+    layoutId: { type: String, default: '' },
+    color: { type: String, default: '' },
+}, { _id: false });
+
+const BottomNavSchema = new mongoose.Schema({
+    enabled: { type: Boolean, default: false },
+    showLabels: { type: Boolean, default: true },
+    accentColor: { type: String, default: '#0ea5e9' },
+    theme: { type: String, enum: ['glass', 'solid-dark', 'solid-light'], default: 'glass' },
+    items: [BottomNavItemSchema],
+}, { _id: false });
+
 const ScreensaverSchema = new mongoose.Schema({
     enabled: { type: Boolean, default: false },
     idleMs: { type: Number, default: 30000 },
@@ -18,6 +34,7 @@ const ScreensaverSchema = new mongoose.Schema({
 const SettingsSchema = new mongoose.Schema({
     key: { type: String, unique: true, default: 'global' },
     screensaver: { type: ScreensaverSchema, default: () => ({}) },
+    bottomNav: { type: BottomNavSchema, default: () => ({}) },
     updatedAt: { type: Date, default: Date.now },
 });
 

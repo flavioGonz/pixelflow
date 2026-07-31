@@ -19,6 +19,7 @@ import ChevronsLeft from 'lucide-react/dist/esm/icons/chevrons-left';
 import ChevronsRight from 'lucide-react/dist/esm/icons/chevrons-right';
 import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down';
 import Moon from 'lucide-react/dist/esm/icons/moon';
+import MenuIcon from 'lucide-react/dist/esm/icons/menu';
 
 interface AdminSidebarProps {
     expanded: boolean;
@@ -49,6 +50,7 @@ const sections: Section[] = [
             { icon: Calendar, label: 'Rutinas', href: '/admin/schedules', id: 'schedules' },
             { icon: Network, label: 'Mapa', href: '/admin/flow', id: 'flow' },
             { icon: Moon, label: 'Screensaver', href: '/admin/screensaver', id: 'screensaver' },
+            { icon: MenuIcon, label: 'Barra', href: '/admin/bottomnav', id: 'bottomnav' },
         ],
     },
     {

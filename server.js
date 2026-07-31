@@ -687,6 +687,26 @@ nextApp.prepare().then(() => {
         }
     });
 
+    // ===== BOTTOM NAV (barra flotante global) =====
+    expressApp.get('/api/settings/bottomnav', async (req, res) => {
+        try {
+            let doc = await Settings.findOne({ key: 'global' });
+            if (!doc) doc = await Settings.create({ key: 'global' });
+            res.json(doc.bottomNav || {});
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    expressApp.patch('/api/settings/bottomnav', async (req, res) => {
+        try {
+            const patch = req.body || {};
+            let doc = await Settings.findOne({ key: 'global' });
+            if (!doc) doc = await Settings.create({ key: 'global' });
+            doc.bottomNav = { ...(doc.bottomNav?.toObject?.() || doc.bottomNav || {}), ...patch };
+            await doc.save();
+            io.emit('bottomnav_updated', doc.bottomNav);
+            res.json(doc.bottomNav);
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
     // ===== OFFLINE-FIRST SYNC (Solución C) =====
     // GET /api/sync/manifest → todo lo que un player necesita para operar offline
     expressApp.get('/api/sync/manifest', async (req, res) => {
@@ -719,7 +739,7 @@ nextApp.prepare().then(() => {
                 serverTime: Date.now(),
                 layouts,
                 mediaUrls: Array.from(mediaSet).sort(),
-                settings: { screensaver: ss },
+                settings: { screensaver: ss, bottomNav: screensaverDoc?.bottomNav || {} },
             });
         } catch (e) {
             console.error('[/api/sync/manifest]', e);

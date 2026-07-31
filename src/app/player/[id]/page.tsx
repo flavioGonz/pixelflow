@@ -11,6 +11,7 @@ import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { registerServiceWorker, prefetchAllLayouts } from '@/lib/offlineSync';
 import { bootstrapSync, applyDelta } from '@/lib/syncEngine';
 import { SyncSplash } from '@/components/player/SyncSplash';
+import { BottomNav, BottomNavConfig } from '@/components/player/BottomNav';
 import WidgetRenderer from '@/components/shared/WidgetRenderer';
 
 // Layout-level transitions when changing interface. Chosen via layout.transition or master's transition.
@@ -72,6 +73,7 @@ export default function PlayerPage() {
     const { width, height } = useWindowSize();
     const { layout, setLayout, setConnected, isConnected, setScreenId, isAuthorized, setAuthorized, pushToHistory, navDirection, setNavDirection } = usePlayerStore();
     const [bootstrapping, setBootstrapping] = useState<boolean>(true);
+    const [bottomNavConfig, setBottomNavConfig] = useState<BottomNavConfig | null>(null);
 
     // iOS-style edge swipe from left → BACK (goes to previous layout in history)
     useEdgeSwipeBack({
@@ -338,6 +340,10 @@ export default function PlayerPage() {
             console.log('Socket Disconnected:', reason);
             setConnected(false);
         });
+
+        // Fetch bottomNav config al arrancar
+        fetch('/api/settings/bottomnav').then(r => r.ok ? r.json() : null).then(c => c && setBottomNavConfig(c)).catch(() => {});
+        socket.on('bottomnav_updated', (cfg: any) => setBottomNavConfig(cfg));
 
         socket.on('layout_delta', (msg: any) => {
             try { if (msg?.type === 'updated' && msg.layout) applyDelta(msg.layout); }

@@ -606,9 +606,25 @@ function AdminDashboard() {
                     layoutName={layoutName}
                     screens={screens}
                     screenId={screenId}
-                    onScreenChange={setScreenId}
-                    onPreview={pushOnly}
-                    onPublish={saveAndPush}
+                    onScreenChange={(id) => {
+                        setScreenId(id);
+                        // Adaptar tamaño del lienzo al viewport reportado por esa pantalla
+                        const scr = screens.find((s) => s.screenId === id);
+                        if (scr?.viewport?.width && scr?.viewport?.height) {
+                            const w = scr.viewport.width;
+                            const h = scr.viewport.height;
+                            setResolution({ width: w, height: h });
+                            setOrientation(h > w ? 'portrait' : 'landscape');
+                            toast.success('Lienzo adaptado a ' + (scr.name || id), { description: w + '×' + h + ' px' });
+                        }
+                    }}
+                    onPreview={() => {
+                        const url = editingLayoutId
+                            ? '/preview/' + editingLayoutId
+                            : (screenId ? '/player/' + screenId : '');
+                        if (!url) { toast.error('Guardá primero la interface o eleg\u00ed una pantalla.'); return; }
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
                     onCopyUrl={async () => {
                         if (!screenId) { toast.error('Seleccioná un monitor primero.'); return; }
                         const url = window.location.origin + '/player/' + screenId;

@@ -41,7 +41,7 @@ interface FloatingRightDockProps {
     editingLayoutId?: string | null;
     onScreenChange: (id: string) => void;
     onPreview: () => void;
-    onPublish: () => void;
+    onPublish?: () => void;
     onSave?: () => void;
     isDirty?: boolean;
     lastSavedAt?: number | null;
@@ -376,27 +376,16 @@ export const FloatingRightDock: React.FC<FloatingRightDockProps> = ({
                     </TooltipContent>
                 </Tooltip>
 
-                {/* Preview / Publish */}
+                {/* Vista previa en ventana nueva */}
                 <Tooltip>
                     <TooltipTrigger
                         onClick={onPreview}
                         aria-label="Vista previa"
-                        className="size-9 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        className="size-9 grid place-items-center rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
                     >
                         <Eye className="size-4" />
                     </TooltipTrigger>
-                    <TooltipContent side="left">Vista previa</TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                    <TooltipTrigger
-                        onClick={onPublish}
-                        aria-label={isEditing ? 'Actualizar' : 'Publicar'}
-                        className="size-9 grid place-items-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                    >
-                        <Zap className="size-4" />
-                    </TooltipTrigger>
-                    <TooltipContent side="left">{isEditing ? 'Actualizar' : 'Publicar'}</TooltipContent>
+                    <TooltipContent side="left">Vista previa (nueva ventana)</TooltipContent>
                 </Tooltip>
             </div>
         
