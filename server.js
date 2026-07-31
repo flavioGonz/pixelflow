@@ -882,7 +882,27 @@ nextApp.prepare().then(() => {
     });
 
     // Next.js handler (must go after ALL expressApp routes)
-    expressApp.all(/.*/, (req, res) => {
+    // Fix chunk 404 zombie: si un chunk _next/static no existe,
+    // devolver JS con reload en vez de 404 → rompe el loop de NPM cacheando 404s.
+    expressApp.use('/_next/static', (req, res, next) => {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        next();
+    });
+    expressApp.use('/_next/static/chunks', (req, res, next) => {
+        const _fs = require('fs');
+        const _path = require('path');
+        const filePath = _path.join(__dirname, '.next', 'static', 'chunks', req.path.replace(/^\//, ''));
+        if (_fs.existsSync(filePath)) return next();
+        // Chunk no existe → devolver un JS que fuerza reload del HTML padre
+        console.log('[chunk 404 zombie]', req.path, '→ reload response');
+        res.status(200)
+           .setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+           .setHeader('Content-Type', 'application/javascript; charset=utf-8')
+           .send("// PixelFlow: chunk viejo tras rebuild — recargando página...\n" +
+                 "if (typeof window !== 'undefined') { window.location.reload(); }\n");
+    });
+
+        expressApp.all(/.*/, (req, res) => {
         const parsedUrl = parse(req.url, true);
         handle(req, res, parsedUrl);
     });
