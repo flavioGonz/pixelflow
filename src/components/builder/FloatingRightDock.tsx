@@ -162,11 +162,11 @@ export const FloatingRightDock: React.FC<FloatingRightDockProps> = ({
                                         <button
                                             key={l._id}
                                             onClick={() => { onLayoutChange(l._id); setLayoutSearch(''); }}
-                                            className={'text-left px-2.5 py-1.5 rounded-md text-[12px] transition-colors truncate ' + (
+                                            className={'flex items-center min-h-[34px] text-left px-2.5 py-2 rounded-md text-[12px] leading-tight transition-colors ' + (
                                                 active ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-accent text-foreground'
                                             )}
                                         >
-                                            {l.name}
+                                            <span className="truncate">{l.name}</span>
                                         </button>
                                     );
                                 })

@@ -72,6 +72,7 @@ export default function PlayerPage() {
     const orientation = useScreenOrientation();
     const { width, height } = useWindowSize();
     const { layout, setLayout, setConnected, isConnected, setScreenId, isAuthorized, setAuthorized, pushToHistory, navDirection, setNavDirection } = usePlayerStore();
+    const popFromHistory = usePlayerStore((s: any) => s.popFromHistory);
     const [bootstrapping, setBootstrapping] = useState<boolean>(true);
     const [bottomNavConfig, setBottomNavConfig] = useState<BottomNavConfig | null>(null);
 
@@ -476,8 +477,16 @@ export default function PlayerPage() {
                 setNavDirection('pop');
                 socket?.emit('request_layout', { screenId: id, layoutId: _defaultLayoutIdRef.current });
             } else if (action === 'BACK') {
-                setNavDirection('pop');
-                socket?.emit('request_previous_layout', { screenId: id });
+                // Usar history stack local — más confiable que el server
+                const prev = popFromHistory && popFromHistory();
+                if (prev && socket?.connected && id) {
+                    setNavDirection('pop');
+                    socket.emit('request_layout', { screenId: id, layoutId: prev });
+                } else if (_defaultLayoutIdRef.current && socket?.connected && id) {
+                    // Fallback: si no hay history, ir al home
+                    setNavDirection('pop');
+                    socket.emit('request_layout', { screenId: id, layoutId: _defaultLayoutIdRef.current });
+                }
             } else if (action === 'RELOAD') {
                 if (typeof window !== 'undefined') window.location.reload();
             }

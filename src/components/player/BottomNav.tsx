@@ -47,15 +47,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ config, currentLayoutId, d
     }, [config?.items]);
 
     if (!config?.enabled) return null;
-    const isAwayFromHome = !!(defaultLayoutId && currentLayoutId && currentLayoutId !== defaultLayoutId);
-    const rawItems = (config.items || []).map((it) => {
-        // Si estamos fuera del home, mutar action=HOME → action=BACK (label 'Atrás', ícono ChevronLeft)
-        if (isAwayFromHome && it && it.action === 'HOME') {
-            return { ...it, _isMutatedBack: true, action: 'BACK' as any, label: 'Atrás', icon: 'ChevronLeft' };
-        }
-        return it;
-    });
-    const rootItems = rawItems.filter(it => it && (
+    const rootItems = (config.items || []).filter(it => it && (
         it.action === 'BACK' || it.action === 'HOME' ||
         (it.action === 'GO_TO' && it.layoutId) ||
         (it.children && it.children.length > 0)
