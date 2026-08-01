@@ -43,7 +43,6 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
     const [uploading, setUploading] = useState(false);
     const [pending, setPending] = useState<File | null>(null);
     const [copiedName, setCopiedName] = useState<string | null>(null);
-    const [preview, setPreview] = useState<MediaItem | null>(null);
     const [toDelete, setToDelete] = useState<MediaItem | null>(null);
     const [usage, setUsage] = useState<UsageMap>({});
 
@@ -180,7 +179,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
                                 item={item}
                                 usage={usage[item.url] || []}
                                 onSelect={onSelect}
-                                onPreview={setPreview}
+                                onPreview={(it) => window.open(it.url, '_blank', 'noopener,noreferrer')}
                                 onDelete={setToDelete}
                                 onCopy={handleCopy}
                                 copied={copiedName === item.filename}
@@ -365,64 +364,5 @@ const MediaCard: React.FC<{
     );
 };
 
-const PreviewModal: React.FC<{
-    item: MediaItem;
-    usage: Array<{ _id: string; name: string }>;
-    onClose: () => void;
-    onCopy: (i: MediaItem) => void;
-    copied: boolean;
-    onDelete: (i: MediaItem) => void;
-}> = ({ item, usage, onClose, onCopy, copied, onDelete }) => {
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
-    const warn = sizeWarning(item.size, item.type === 'video' ? 'video' : 'image');
-    return (
-        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex flex-col" onClick={onClose}>
-            <div className="flex items-center gap-3 p-4 border-b border-white/10 text-white" onClick={(e) => e.stopPropagation()}>
-                <div className="min-w-0 flex-1">
-                    <div className="text-[14px] font-semibold font-mono truncate">{item.filename}</div>
-                    <div className="text-[11px] text-white/60 flex items-center gap-2 flex-wrap mt-0.5">
-                        <span className="uppercase font-bold tracking-widest">{item.type}</span>
-                        <span>·</span>
-                        <span>{fmtBytes(item.size)}</span>
-                        {item.width && item.height && (<><span>·</span><span>{item.width}×{item.height}</span></>)}
-                        <span>·</span>
-                        <span>{fmtDate(item.mtime)}</span>
-                        <span className={"font-bold uppercase tracking-widest ml-2 " + warn.color}>{warn.label}</span>
-                    </div>
-                    <div className="text-[10px] text-white/40 mt-1">{warn.hint}</div>
-                    {usage.length > 0 && (
-                        <div className="text-[11px] text-primary mt-1.5 flex items-center gap-1.5">
-                            <Link2 className="size-3.5" />
-                            Usado en: <span className="text-white/80 truncate">{usage.map(l => l.name).join(' · ')}</span>
-                        </div>
-                    )}
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                    <Button variant="secondary" size="sm" onClick={() => onCopy(item)} className="gap-1.5">
-                        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                        {copied ? 'Copiado' : 'Copiar URL'}
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => onDelete(item)} className="gap-1.5">
-                        <Trash2 className="size-3.5" /> Borrar
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10">ESC</Button>
-                </div>
-            </div>
-            <div className="flex-1 min-h-0 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
-                {item.type === 'image' ? (
-                    <img src={item.url} alt={item.filename} className="max-w-full max-h-full object-contain rounded shadow-2xl" />
-                ) : item.type === 'video' ? (
-                    <video src={item.url} controls autoPlay className="max-w-full max-h-full object-contain rounded shadow-2xl" />
-                ) : (
-                    <div className="text-white/60 text-[13px]">Tipo no reproducible</div>
-                )}
-            </div>
-        </div>
-    );
-};
 
 export default MediaLibrary;
