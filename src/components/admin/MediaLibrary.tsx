@@ -204,8 +204,6 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ onSelect, lockType }
                 </div>
             )}
 
-            {/* Preview modal */}
-            {preview && <PreviewModal item={preview} usage={usage[preview.url] || []} onClose={() => setPreview(null)} onCopy={handleCopy} copied={copiedName === preview.filename} onDelete={(it) => { setPreview(null); setToDelete(it); }} />}
 
             {/* Delete confirmation modal */}
             <AlertDialog open={!!toDelete} onOpenChange={(o) => { if (!o) setToDelete(null); }}>
